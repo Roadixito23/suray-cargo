@@ -70,7 +70,9 @@ export function VentaPage() {
     })
   }, [n])
 
-  const item = autoItem ? String(hoy.length + 1) : itemManual
+  // Cada paquete consume un número de ítem, aunque varias ventas los agrupen en una boleta.
+  const paquetesHoy = hoy.reduce((s, v) => s + (parseInt(v.cantidad, 10) || 1), 0)
+  const item = autoItem ? String(paquetesHoy + 1) : itemManual
   const numeroOperacion = autoOp ? String(hoy.length + 1) : opManual
   const montoCalculado = multi ? articulos.reduce((s, a) => s + (a.precio || 0), 0) : Number(monto) || 0
 
@@ -302,7 +304,7 @@ export function VentaPage() {
       <aside className="panel vista-previa">
         <h3>Vista previa del ticket</h3>
         <div className="ticket-marco">
-          <Ticket venta={vistaPrevia} paquete={1} />
+          <Ticket venta={vistaPrevia} paquete={Number(item) || 1} />
         </div>
         {multi && <small>Se imprimirán {n} tickets (uno por paquete).</small>}
       </aside>
