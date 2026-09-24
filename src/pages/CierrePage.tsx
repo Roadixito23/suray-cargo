@@ -3,10 +3,10 @@ import { useUsuario } from '../auth/AuthContext'
 import { Modal } from '../components/Modal'
 import { useImprimir } from '../components/PrintContext'
 import { ReporteCierre } from '../components/ReporteCierre'
-import { ListaVentasDia, TarjetasResumen } from '../components/ResumenDia'
+import { ListaRetiros, ListaVentasDia, TarjetasResumen } from '../components/ResumenDia'
 import { useToast } from '../components/Toast'
 import { formatoFecha } from '../lib/format'
-import { resumenCaja, ventasDelDia } from '../services/ventas'
+import { resumenCaja, retirosDelDia, ventasDelDia } from '../services/ventas'
 import type { Venta } from '../types'
 
 /** El cierre es un reporte: no borra ni bloquea ventas (regla de negocio, ver bóveda). */
@@ -15,13 +15,15 @@ export function CierrePage() {
   const imprimir = useImprimir()
   const toast = useToast()
   const [ventas, setVentas] = useState<Venta[]>([])
+  const [retiros, setRetiros] = useState<Venta[]>([])
   const [confirmar, setConfirmar] = useState(false)
 
   useEffect(() => {
     ventasDelDia(usuario).then(setVentas)
+    retirosDelDia(usuario).then(setRetiros)
   }, [usuario])
 
-  const resumen = useMemo(() => resumenCaja(ventas), [ventas])
+  const resumen = useMemo(() => resumenCaja(ventas, retiros), [ventas, retiros])
   const anuladas = ventas.filter((v) => v.anulada)
   const activas = ventas.filter((v) => !v.anulada)
 
@@ -40,6 +42,12 @@ export function CierrePage() {
 
       <h3>Ventas del día</h3>
       <ListaVentasDia ventas={activas} admin={usuario.esAdmin} />
+      {retiros.length > 0 && (
+        <>
+          <h3>Retiros Por Pagar cobrados hoy</h3>
+          <ListaRetiros retiros={retiros} />
+        </>
+      )}
       {anuladas.length > 0 && (
         <>
           <h3>Ventas anuladas</h3>

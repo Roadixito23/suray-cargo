@@ -20,6 +20,7 @@ export const nombreSucursal = (s: Sucursal) => (s === 'aysen' ? 'Aysén' : 'Coyh
 export const prefijoBoleta = (s: Sucursal) => (s === 'aysen' ? 'AYS' : 'COY')
 export const sucursalOpuesta = (s: Sucursal): Sucursal => (s === 'aysen' ? 'coyhaique' : 'aysen')
 
-export const etiquetaMetodo = (m: string) => (m === 'efectivo' ? 'Efectivo' : 'Tarjeta')
+export const etiquetaMetodo = (m: string) =>
+  m === 'efectivo' ? 'Efectivo' : m === 'por_pagar' ? 'Por Pagar' : 'Tarjeta'
 export const etiquetaTipoVenta = (t: string) =>
   t === 'por_pagar' ? 'Por Pagar' : t === 'por_facturar' ? 'Por Facturar' : 'Venta'

@@ -1,7 +1,9 @@
 // Nombres de campo estables: los respaldos JSON dependen de ellos.
 
 export type Sucursal = 'aysen' | 'coyhaique'
-export type MetodoPago = 'efectivo' | 'tarjeta'
+export type MetodoPago = 'efectivo' | 'tarjeta' | 'por_pagar'
+/** Cómo se cobra una carga Por Pagar al retirarla en destino. */
+export type MetodoCobro = 'efectivo' | 'tarjeta'
 export type TipoVenta = 'venta' | 'por_pagar' | 'por_facturar'
 
 export interface TipoArticulo {
@@ -25,18 +27,46 @@ export interface Venta {
   remitente: string
   usuarioId: string
   usuarioNombre: string
-  numeroOperacion?: string | null
+  numeroComprobante?: string | null
   anulada: boolean
   motivoAnulacion?: string | null
   fechaAnulacion?: string | null
   usuarioAnulacion?: string | null
   tipoVenta: TipoVenta
+  // Retiro de una carga Por Pagar en la sucursal destino (se completa una sola vez).
+  retiroFecha?: string | null
+  retiroNombre?: string | null
+  retiroRut?: string | null
+  retiroMetodoPago?: MetodoCobro | null
+  retiroUsuarioId?: string | null
+  retiroUsuarioNombre?: string | null
+}
+
+export interface DatosRetiro {
+  comprobante: string
+  nombre: string
+  rut: string
+  metodoPago: MetodoCobro
+  usuarioId: string
+  usuarioNombre: string
 }
 
 /** Datos que entrega la UI; el número de boleta, id y fecha los asigna la API. */
 export type NuevaVenta = Omit<
   Venta,
-  'id' | 'numeroBoleta' | 'fecha' | 'anulada' | 'motivoAnulacion' | 'fechaAnulacion' | 'usuarioAnulacion'
+  | 'id'
+  | 'numeroBoleta'
+  | 'fecha'
+  | 'anulada'
+  | 'motivoAnulacion'
+  | 'fechaAnulacion'
+  | 'usuarioAnulacion'
+  | 'retiroFecha'
+  | 'retiroNombre'
+  | 'retiroRut'
+  | 'retiroMetodoPago'
+  | 'retiroUsuarioId'
+  | 'retiroUsuarioNombre'
 > & { sucursalBoleta: Sucursal }
 
 export interface Usuario {
@@ -62,6 +92,7 @@ export type AccionAuditoria =
   | 'login'
   | 'logout'
   | 'crear_venta'
+  | 'retirar_carga'
   | 'anular_venta'
   | 'crear_usuario'
   | 'editar_usuario'
@@ -85,6 +116,11 @@ export interface FiltroVentas {
   desde?: Date
   hasta?: Date
   usuarioId?: string
+  /** Amplía el alcance: además de lo propio, incluye las cargas Por Pagar con este destino. */
+  porPagarDestino?: Sucursal
+  retiroUsuarioId?: string
+  retiroDesde?: Date
+  retiroHasta?: Date
 }
 
 export interface FiltroAuditoria {

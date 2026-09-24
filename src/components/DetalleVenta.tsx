@@ -21,9 +21,20 @@ export function DetalleVenta({ v }: { v: Venta }) {
       {fila('Remitente', v.remitente)}
       {fila('Monto', formatoMonto(v.monto))}
       {fila('Pago', etiquetaMetodo(v.metodoPago))}
-      {fila('N° operación', v.numeroOperacion)}
+      {fila('N° comprobante', v.numeroComprobante)}
       {fila('Tipo de venta', etiquetaTipoVenta(v.tipoVenta))}
       {fila('Vendedor', v.usuarioNombre)}
+      {v.metodoPago === 'por_pagar' && !v.anulada && !v.retiroFecha && fila('Estado', 'Pendiente de retiro')}
+      {v.retiroFecha && (
+        <>
+          <h4>Retiro</h4>
+          {fila('Fecha de retiro', formatoFechaHora(v.retiroFecha))}
+          {fila('Retira', v.retiroNombre)}
+          {fila('RUT', v.retiroRut)}
+          {fila('Cobro', v.retiroMetodoPago ? etiquetaMetodo(v.retiroMetodoPago) : null)}
+          {fila('Registrado por', v.retiroUsuarioNombre)}
+        </>
+      )}
       {v.tiposArticulos?.length ? (
         <>
           <h4>Artículos</h4>

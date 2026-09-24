@@ -4,7 +4,7 @@ import { useUsuario } from '../auth/AuthContext'
 import { useImprimir } from '../components/PrintContext'
 import { Ticket, TicketsVenta, type DatosTicket } from '../components/Ticket'
 import { useToast } from '../components/Toast'
-import { formatoMonto, nombreSucursal, sucursalOpuesta } from '../lib/format'
+import { etiquetaMetodo, formatoMonto, nombreSucursal, sucursalOpuesta } from '../lib/format'
 import { guardar, leer } from '../lib/storage'
 import { registrarVenta, resumenCaja, ventasDelDia } from '../services/ventas'
 import type { MetodoPago, Sucursal, TipoArticulo, Venta } from '../types'
@@ -73,7 +73,13 @@ export function VentaPage() {
   // Cada paquete consume un número de ítem, aunque varias ventas los agrupen en una boleta.
   const paquetesHoy = hoy.reduce((s, v) => s + (parseInt(v.cantidad, 10) || 1), 0)
   const item = autoItem ? String(paquetesHoy + 1) : itemManual
-  const numeroOperacion = autoOp ? String(hoy.length + 1) : opManual
+  const porPagar = metodo === 'por_pagar'
+  // Las ventas Por Pagar no llevan comprobante, así que no consumen número.
+  const numeroComprobante = porPagar
+    ? ''
+    : autoOp
+      ? String(hoy.filter((v) => v.metodoPago !== 'por_pagar').length + 1)
+      : opManual
   const montoCalculado = multi ? articulos.reduce((s, a) => s + (a.precio || 0), 0) : Number(monto) || 0
 
   const completo =
@@ -95,6 +101,8 @@ export function VentaPage() {
     usuarioNombre: usuario.nombre,
     monto: montoCalculado,
     cantidad: String(n),
+    metodoPago: metodo,
+    numeroComprobante,
   }
 
   function limpiar() {
@@ -129,8 +137,8 @@ export function VentaPage() {
         remitente: remitente.trim(),
         usuarioId: usuario.id,
         usuarioNombre: usuario.nombre,
-        numeroOperacion: numeroOperacion.trim() ? numeroOperacion.trim() : null,
-        tipoVenta: 'venta',
+        numeroComprobante: numeroComprobante.trim() ? numeroComprobante.trim() : null,
+        tipoVenta: porPagar ? 'por_pagar' : 'venta',
       })
       toast(`Venta #${venta.numeroBoleta} registrada: ${formatoMonto(venta.monto)}`)
       limpiar()
@@ -279,22 +287,25 @@ export function VentaPage() {
         <div className="campo">
           <span className="etiqueta">Método de pago</span>
           <div className="segmentado">
-            {(['efectivo', 'tarjeta'] as const).map((m) => (
+            {(['efectivo', 'tarjeta', 'por_pagar'] as const).map((m) => (
               <button key={m} type="button" className={metodo === m ? 'sel' : ''} onClick={() => setMetodo(m)}>
-                {m === 'efectivo' ? 'Efectivo' : 'Tarjeta'}
+                {etiquetaMetodo(m)}
               </button>
             ))}
           </div>
+          {porPagar && <small>Se cobra al retirar en {nombreSucursal(destino)}; no lleva N° de comprobante.</small>}
         </div>
 
-        <label className="campo">
-          <span className="etiqueta">N° de operación</span>
-          <input value={numeroOperacion} readOnly={autoOp} onChange={(e) => setOpManual(e.target.value)} />
-          <label className="check">
-            <input type="checkbox" checked={autoOp} onChange={(e) => setAutoOp(e.target.checked)} />
-            Autoincrementar por venta
+        {!porPagar && (
+          <label className="campo">
+            <span className="etiqueta">N° de comprobante</span>
+            <input value={numeroComprobante} readOnly={autoOp} onChange={(e) => setOpManual(e.target.value)} />
+            <label className="check">
+              <input type="checkbox" checked={autoOp} onChange={(e) => setAutoOp(e.target.checked)} />
+              Autoincrementar por venta
+            </label>
           </label>
-        </label>
+        )}
 
         <button className="btn primario grande" disabled={!completo || guardando}>
           {guardando ? 'Guardando…' : 'Registrar venta e imprimir'}

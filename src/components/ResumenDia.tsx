@@ -20,6 +20,33 @@ export function TarjetasResumen({ r }: { r: ResumenCaja }) {
   )
 }
 
+export function ListaRetiros({ retiros }: { retiros: Venta[] }) {
+  return (
+    <div className="tabla-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Boleta</th><th>Hora</th><th>Retira</th><th>RUT</th><th>Comprobante</th><th>Cobro</th><th className="der">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {retiros.map((v) => (
+            <tr key={v.id}>
+              <td>{v.numeroBoleta}</td>
+              <td>{v.retiroFecha ? formatoFechaHora(v.retiroFecha).slice(-5) : ''}</td>
+              <td>{v.retiroNombre}</td>
+              <td>{v.retiroRut}</td>
+              <td>{v.numeroComprobante}</td>
+              <td>{v.retiroMetodoPago ? etiquetaMetodo(v.retiroMetodoPago) : ''}</td>
+              <td className="der">{formatoMonto(v.monto)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function ListaVentasDia({ ventas, admin }: { ventas: Venta[]; admin: boolean }) {
   if (!ventas.length) return <p className="vacio">Sin ventas.</p>
   return (

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useUsuario } from '../auth/AuthContext'
 import { aInputDate, desdeInputDate, finDelDia } from '../lib/fechas'
-import { etiquetaMetodo, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { api } from '../api'
+import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { normalizarRut } from '../lib/rut'
 import { listarVentas } from '../services/ventas'
 import type { Sucursal, Venta } from '../types'
 
@@ -10,13 +12,15 @@ interface Props {
   acciones(v: Venta, recargar: () => void): ReactNode
   /** Si es true, oculta las anuladas. */
   soloActivas?: boolean
+  /** Buscar Envío: suma las cargas Por Pagar que llegan a la sucursal y los retiros del rango. */
+  incluirPorPagar?: boolean
 }
 
 /**
  * Listado filtrable de ventas compartido por Buscar / Reimprimir / Anular.
  * Alcance por rol vía `listarVentas`.
  */
-export function VentasExplorer({ acciones, soloActivas }: Props) {
+export function VentasExplorer({ acciones, soloActivas, incluirPorPagar }: Props) {
   const usuario = useUsuario()
   const hoy = aInputDate(new Date())
   const [desde, setDesde] = useState(hoy)
@@ -29,16 +33,35 @@ export function VentasExplorer({ acciones, soloActivas }: Props) {
 
   const recargar = useCallback(() => {
     setCargando(true)
+    const d = desdeInputDate(desde)
     const h = desdeInputDate(hasta)
-    listarVentas(usuario, { desde: desdeInputDate(desde), hasta: h ? finDelDia(h) : undefined })
-      .then(setVentas)
+    const fin = h ? finDelDia(h) : undefined
+    const porFecha = listarVentas(usuario, {
+      desde: d,
+      hasta: fin,
+      ...(incluirPorPagar ? { porPagarDestino: usuario.sucursal } : {}),
+    })
+    // Un envío Por Pagar puede venderse un día y retirarse otro: también se buscan por fecha de retiro.
+    const porRetiro = incluirPorPagar
+      ? api.ventas.listar({
+          retiroDesde: d,
+          retiroHasta: fin,
+          ...(usuario.esAdmin ? {} : { retiroUsuarioId: usuario.id }),
+        })
+      : Promise.resolve<Venta[]>([])
+    Promise.all([porFecha, porRetiro])
+      .then(([a, b]) => {
+        const ids = new Set(a.map((v) => v.id))
+        setVentas([...a, ...b.filter((v) => !ids.has(v.id))].sort((x, y) => y.fecha.localeCompare(x.fecha)))
+      })
       .finally(() => setCargando(false))
-  }, [usuario, desde, hasta])
+  }, [usuario, desde, hasta, incluirPorPagar])
 
   useEffect(recargar, [recargar])
 
   const filtradas = useMemo(() => {
     const q = texto.trim().toLowerCase()
+    const qRut = normalizarRut(texto)
     return ventas.filter(
       (v) =>
         (!soloActivas || !v.anulada) &&
@@ -47,7 +70,10 @@ export function VentasExplorer({ acciones, soloActivas }: Props) {
         (!q ||
           v.numeroBoleta.toLowerCase().includes(q) ||
           v.destinatario.toLowerCase().includes(q) ||
-          v.remitente.toLowerCase().includes(q)),
+          v.remitente.toLowerCase().includes(q) ||
+          (v.retiroNombre ?? '').toLowerCase().includes(q) ||
+          (v.numeroComprobante ?? '').toLowerCase().includes(q) ||
+          (qRut.length > 1 && normalizarRut(v.retiroRut ?? '').includes(qRut))),
     )
   }, [ventas, texto, destino, metodo, soloActivas])
 
@@ -56,7 +82,7 @@ export function VentasExplorer({ acciones, soloActivas }: Props) {
       <div className="filtros">
         <input
           type="search"
-          placeholder="Boleta, destinatario o remitente"
+          placeholder={incluirPorPagar ? 'Boleta, nombre, RUT o comprobante' : 'Boleta, destinatario o remitente'}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           aria-label="Buscar"
@@ -72,6 +98,7 @@ export function VentasExplorer({ acciones, soloActivas }: Props) {
           <option value="">Todo método</option>
           <option value="efectivo">Efectivo</option>
           <option value="tarjeta">Tarjeta</option>
+          <option value="por_pagar">Por Pagar</option>
         </select>
       </div>
 
@@ -92,7 +119,14 @@ export function VentasExplorer({ acciones, soloActivas }: Props) {
                 <td>{v.destinatario}</td>
                 <td>{v.remitente}</td>
                 <td className="der">{formatoMonto(v.monto)}</td>
-                <td>{etiquetaMetodo(v.metodoPago)}</td>
+                <td>
+                  {etiquetaMetodo(v.metodoPago)}
+                  {v.metodoPago === 'por_pagar' && !v.anulada && (
+                    <span className={v.retiroFecha ? 'badge' : 'badge rojo'}>
+                      {v.retiroFecha ? `Retirado ${formatoFecha(v.retiroFecha)}` : 'Pendiente'}
+                    </span>
+                  )}
+                </td>
                 {usuario.esAdmin && <td>{v.usuarioNombre}</td>}
                 <td className="acciones">{acciones(v, recargar)}</td>
               </tr>

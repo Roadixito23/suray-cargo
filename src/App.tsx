@@ -8,6 +8,7 @@ import { CierrePage } from './pages/CierrePage'
 import { HistoricoPage } from './pages/HistoricoPage'
 import { LoginPage } from './pages/LoginPage'
 import { ReimprimirPage } from './pages/ReimprimirPage'
+import { RetiroPorPagarPage } from './pages/RetiroPorPagarPage'
 import { RespaldosPage } from './pages/RespaldosPage'
 import { UsuariosPage } from './pages/UsuariosPage'
 import { VentaPage } from './pages/VentaPage'
@@ -34,6 +35,7 @@ export function App() {
         <Route path="/ventas" element={<VentaPage />} />
         <Route path="/cierre" element={<CierrePage />} />
         <Route path="/buscar" element={<BuscarPage />} />
+        <Route path="/retiro-por-pagar" element={<RetiroPorPagarPage />} />
         <Route path="/reimprimir" element={<ReimprimirPage />} />
         <Route path="/anular" element={<AnularPage />} />
         <Route path="/historico" element={<HistoricoPage />} />

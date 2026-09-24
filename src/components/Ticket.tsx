@@ -1,10 +1,19 @@
-import { formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
 import type { Venta } from '../types'
 
 /** Datos mínimos para dibujar un ticket (permite la vista previa con el formulario a medias). */
 export type DatosTicket = Pick<
   Venta,
-  'numeroBoleta' | 'destino' | 'fecha' | 'destinatario' | 'remitente' | 'usuarioNombre' | 'monto' | 'cantidad'
+  | 'numeroBoleta'
+  | 'destino'
+  | 'fecha'
+  | 'destinatario'
+  | 'remitente'
+  | 'usuarioNombre'
+  | 'monto'
+  | 'cantidad'
+  | 'metodoPago'
+  | 'numeroComprobante'
 >
 
 export const RUT_EMPRESA = '76.334.380-4'
@@ -25,6 +34,7 @@ function Campo({ etiqueta, valor, fuerte }: { etiqueta: string; valor: string; f
 /** Un ticket = un paquete (N/total). Ancho 80 mm, ver estilos `.ticket*` en styles.css. */
 export function Ticket({ venta, paquete }: { venta: DatosTicket; paquete: number }) {
   const total = venta.cantidad || '1'
+  const porPagar = venta.metodoPago === 'por_pagar'
   return (
     <section className="ticket">
       <Cinta />
@@ -47,7 +57,11 @@ export function Ticket({ venta, paquete }: { venta: DatosTicket; paquete: number
         <Campo etiqueta="Remitente:" valor={venta.remitente} />
         <hr />
         <Campo etiqueta="Vendedor:" valor={venta.usuarioNombre} />
+        <hr />
+        <div className="ticket-seccion">Método de Pago</div>
+        <Campo etiqueta="Pago:" valor={etiquetaMetodo(venta.metodoPago)} fuerte={porPagar} />
         <Campo etiqueta="Valor:" valor={formatoMonto(venta.monto)} fuerte />
+        {!porPagar && <Campo etiqueta="N° Comprobante:" valor={venta.numeroComprobante || '-'} />}
       </div>
       <Cinta />
     </section>

@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { api } from '../api'
 import { resetLocal } from '../api/localApi'
 import type { NuevaVenta, UsuarioSesion } from '../types'
-import { anularVenta, listarVentas, registrarVenta, resumenCaja } from './ventas'
+import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
+import {
+  anularVenta, listarVentas, porPagarPendientes, registrarRetiro, registrarVenta, resumenCaja, retirosDelDia,
+} from './ventas'
 import { login } from './usuarios'
 
 const cajero: UsuarioSesion = {
@@ -85,5 +88,66 @@ describe('login y respaldo', () => {
     await api.respaldo.importar(r)
     expect(await api.ventas.listar()).toHaveLength(2)
     expect(await api.ventas.peekNumeroBoleta('coyhaique')).toBe('COY-000003')
+  })
+})
+
+describe('Por Pagar', () => {
+  const secretaria: UsuarioSesion = { ...cajero, id: 'u2', nombre: 'Secretaria', usuario: 'sec', sucursal: 'aysen' }
+  const porPagar = (o: Partial<NuevaVenta> = {}) =>
+    base({ metodoPago: 'por_pagar', tipoVenta: 'por_pagar', numeroComprobante: null, monto: 5000, ...o })
+  const datos = { comprobante: '123', nombre: 'Juan Pérez', rut: '12345678-5', metodoPago: 'efectivo' as const }
+
+  it('no suma a caja al venderse; sí al retirarse, según el método de cobro', async () => {
+    const v = await registrarVenta(cajero, porPagar())
+    expect(resumenCaja(await api.ventas.listar()).totalGeneral).toBe(0)
+    await registrarRetiro(secretaria, v, datos)
+    const r = resumenCaja([], await retirosDelDia(secretaria))
+    expect(r).toMatchObject({ totalEfectivo: 5000, totalTarjeta: 0, totalGeneral: 5000, cantidadEfectivo: 1 })
+  })
+
+  it('guarda comprobante, retirante y fecha; formatea el RUT', async () => {
+    const v = await registrarVenta(cajero, porPagar())
+    const r = await registrarRetiro(secretaria, v, { ...datos, rut: '12345678-5', metodoPago: 'tarjeta' })
+    expect(r).toMatchObject({
+      numeroComprobante: '123', retiroNombre: 'Juan Pérez', retiroRut: '12.345.678-5',
+      retiroMetodoPago: 'tarjeta', retiroUsuarioId: 'u2',
+    })
+    expect(r.retiroFecha).toBeTruthy()
+  })
+
+  it('rechaza doble retiro, RUT inválido, datos vacíos y ventas que no son Por Pagar', async () => {
+    const v = await registrarVenta(cajero, porPagar())
+    await expect(registrarRetiro(secretaria, v, { ...datos, rut: '12345678-9' })).rejects.toThrow('RUT')
+    await expect(registrarRetiro(secretaria, v, { ...datos, nombre: ' ' })).rejects.toThrow('nombre')
+    await expect(registrarRetiro(secretaria, v, { ...datos, comprobante: '' })).rejects.toThrow('comprobante')
+    await registrarRetiro(secretaria, v, datos)
+    await expect(api.ventas.registrarRetiro(v.id, { ...datos, usuarioId: 'u2', usuarioNombre: 'S' })).rejects.toThrow('ya fue retirada')
+    const normal = await registrarVenta(cajero, base())
+    await expect(registrarRetiro(secretaria, normal, datos)).rejects.toThrow('no es Por Pagar')
+  })
+
+  it('no se puede retirar una carga anulada', async () => {
+    const v = await registrarVenta(cajero, porPagar())
+    const anulada = await anularVenta(cajero, v, 'error')
+    await expect(registrarRetiro(secretaria, anulada, datos)).rejects.toThrow('anulada')
+  })
+
+  it('la secretaria de destino ve las pendientes de su sucursal y no las de otra', async () => {
+    await registrarVenta(cajero, porPagar()) // coyhaique → aysen
+    await registrarVenta(cajero, porPagar({ destino: 'coyhaique' }))
+    const pendientes = await porPagarPendientes(secretaria)
+    expect(pendientes).toHaveLength(1)
+    expect(pendientes[0].destino).toBe('aysen')
+    expect(await listarVentas(secretaria)).toHaveLength(0) // el alcance general no cambia
+  })
+})
+
+describe('RUT', () => {
+  it('valida dígito verificador y formatea', () => {
+    expect(validarRut('12.345.678-5')).toBe(true)
+    expect(validarRut('12345678-9')).toBe(false)
+    expect(validarRut('1-9')).toBe(false)
+    expect(formatearRut('123456785')).toBe('12.345.678-5')
+    expect(normalizarRut('12.345.678-k')).toBe('12345678K')
   })
 })

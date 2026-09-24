@@ -40,10 +40,11 @@ export async function restaurarRespaldo(actor: UsuarioSesion, archivo: File): Pr
 const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
 
 export function ventasACsv(ventas: Venta[]): string {
-  const cab = ['Boleta', 'Fecha', 'Destino', 'Item', 'Cantidad', 'Tipo', 'Destinatario', 'Remitente', 'Monto', 'Método', 'N° Operación', 'Vendedor', 'Tipo venta', 'Anulada', 'Motivo anulación']
+  const cab = ['Boleta', 'Fecha', 'Destino', 'Item', 'Cantidad', 'Tipo', 'Destinatario', 'Remitente', 'Monto', 'Método', 'N° Comprobante', 'Vendedor', 'Tipo venta', 'Anulada', 'Motivo anulación', 'Fecha retiro', 'Retira', 'RUT retira', 'Cobro retiro']
   const filas = ventas.map((v) => [
     v.numeroBoleta, v.fecha, v.destino, v.item, v.cantidad, v.tipoProducto, v.destinatario, v.remitente,
-    v.monto, v.metodoPago, v.numeroOperacion, v.usuarioNombre, v.tipoVenta, v.anulada ? 'Sí' : 'No', v.motivoAnulacion,
+    v.monto, v.metodoPago, v.numeroComprobante, v.usuarioNombre, v.tipoVenta, v.anulada ? 'Sí' : 'No', v.motivoAnulacion,
+    v.retiroFecha, v.retiroNombre, v.retiroRut, v.retiroMetodoPago,
   ])
   // BOM para que Excel lea bien las tildes.
   return '﻿' + [cab, ...filas].map((f) => f.map(esc).join(';')).join('\r\n')

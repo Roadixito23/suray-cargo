@@ -7,8 +7,9 @@ import type { FiltroAuditoria, FiltroVentas, RegistroAuditoria, Sucursal, Usuari
 const COLUMNAS_USUARIO = 'id, nombre, usuario, es_admin, fecha_creacion, sucursal'
 const COLUMNAS_VENTA =
   'id, numero_boleta, monto, metodo_pago, fecha, descripcion, destino, item, cantidad, tipo_producto,' +
-  ' tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_operacion, anulada,' +
-  ' motivo_anulacion, fecha_anulacion, usuario_anulacion, tipo_venta'
+  ' tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_comprobante, anulada,' +
+  ' motivo_anulacion, fecha_anulacion, usuario_anulacion, tipo_venta, retiro_fecha, retiro_nombre, retiro_rut,' +
+  ' retiro_metodo_pago, retiro_usuario_id, retiro_usuario_nombre'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function filaAVenta(f: any): Venta {
@@ -28,12 +29,18 @@ function filaAVenta(f: any): Venta {
     remitente: f.remitente,
     usuarioId: f.usuario_id,
     usuarioNombre: f.usuario_nombre,
-    numeroOperacion: f.numero_operacion,
+    numeroComprobante: f.numero_comprobante,
     anulada: f.anulada,
     motivoAnulacion: f.motivo_anulacion,
     fechaAnulacion: f.fecha_anulacion,
     usuarioAnulacion: f.usuario_anulacion,
     tipoVenta: f.tipo_venta,
+    retiroFecha: f.retiro_fecha,
+    retiroNombre: f.retiro_nombre,
+    retiroRut: f.retiro_rut,
+    retiroMetodoPago: f.retiro_metodo_pago,
+    retiroUsuarioId: f.retiro_usuario_id,
+    retiroUsuarioNombre: f.retiro_usuario_nombre,
   }
 }
 
@@ -71,7 +78,14 @@ export const httpApi: Api = {
       let q = supabase.from('ventas').select(COLUMNAS_VENTA).order('fecha', { ascending: false })
       if (filtro.desde) q = q.gte('fecha', filtro.desde.toISOString())
       if (filtro.hasta) q = q.lte('fecha', filtro.hasta.toISOString())
-      if (filtro.usuarioId) q = q.eq('usuario_id', filtro.usuarioId)
+      if (filtro.usuarioId) {
+        q = filtro.porPagarDestino
+          ? q.or(`usuario_id.eq.${filtro.usuarioId},and(tipo_venta.eq.por_pagar,destino.eq.${filtro.porPagarDestino})`)
+          : q.eq('usuario_id', filtro.usuarioId)
+      }
+      if (filtro.retiroUsuarioId) q = q.eq('retiro_usuario_id', filtro.retiroUsuarioId)
+      if (filtro.retiroDesde) q = q.gte('retiro_fecha', filtro.retiroDesde.toISOString())
+      if (filtro.retiroHasta) q = q.lte('retiro_fecha', filtro.retiroHasta.toISOString())
       const { data, error } = await q
       if (error) throw new Error(error.message)
       return (data ?? []).map(filaAVenta)
@@ -103,6 +117,30 @@ export const httpApi: Api = {
         .select(COLUMNAS_VENTA)
         .single()
       if (error) throw new Error(error.message)
+      return filaAVenta(data)
+    },
+
+    async registrarRetiro(id, datos) {
+      // Las guardas de la consulta y el trigger de la base impiden retirar dos veces o una venta que no es Por Pagar.
+      const { data, error } = await supabase
+        .from('ventas')
+        .update({
+          numero_comprobante: datos.comprobante,
+          retiro_fecha: new Date().toISOString(),
+          retiro_nombre: datos.nombre,
+          retiro_rut: datos.rut,
+          retiro_metodo_pago: datos.metodoPago,
+          retiro_usuario_id: datos.usuarioId,
+          retiro_usuario_nombre: datos.usuarioNombre,
+        })
+        .eq('id', id)
+        .eq('tipo_venta', 'por_pagar')
+        .eq('anulada', false)
+        .is('retiro_fecha', null)
+        .select(COLUMNAS_VENTA)
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) throw new Error('La carga ya fue retirada, está anulada o no es Por Pagar')
       return filaAVenta(data)
     },
 

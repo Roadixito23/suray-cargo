@@ -1,7 +1,8 @@
 import { api } from '../api'
 import { finDelDia, inicioDelDia } from '../lib/fechas'
 import { etiquetaMetodo, formatoMonto, nombreSucursal } from '../lib/format'
-import type { FiltroVentas, NuevaVenta, UsuarioSesion, Venta } from '../types'
+import { formatearRut, validarRut } from '../lib/rut'
+import type { FiltroVentas, MetodoCobro, NuevaVenta, UsuarioSesion, Venta } from '../types'
 import { auditar } from './auditoria'
 
 /** Admin ve todo; el resto solo sus propias ventas. */
@@ -46,6 +47,63 @@ export async function anularVenta(usuario: UsuarioSesion, venta: Venta, motivo: 
   return anulada
 }
 
+// ── Por Pagar: retiro en la sucursal destino ────────────────────────────────────
+
+/** Cargas Por Pagar que esperan retiro: las que llegan a la sucursal del usuario (admin: todas). */
+export async function porPagarPendientes(usuario: UsuarioSesion): Promise<Venta[]> {
+  const ventas = await api.ventas.listar(usuario.esAdmin ? {} : { usuarioId: usuario.id, porPagarDestino: usuario.sucursal })
+  return ventas.filter(
+    (v) =>
+      v.tipoVenta === 'por_pagar' &&
+      !v.anulada &&
+      !v.retiroFecha &&
+      (usuario.esAdmin || v.destino === usuario.sucursal),
+  )
+}
+
+/** Retiros cobrados hoy por este usuario (admin: todos); alimentan el cierre de caja. */
+export function retirosDelDia(usuario: UsuarioSesion, dia = new Date()) {
+  return api.ventas.listar({
+    retiroDesde: inicioDelDia(dia),
+    retiroHasta: finDelDia(dia),
+    ...(usuario.esAdmin ? {} : { retiroUsuarioId: usuario.id }),
+  })
+}
+
+export interface DatosNuevoRetiro {
+  comprobante: string
+  nombre: string
+  rut: string
+  metodoPago: MetodoCobro
+}
+
+export async function registrarRetiro(usuario: UsuarioSesion, venta: Venta, datos: DatosNuevoRetiro): Promise<Venta> {
+  const comprobante = datos.comprobante.trim()
+  const nombre = datos.nombre.trim()
+  if (venta.tipoVenta !== 'por_pagar') throw new Error('La venta no es Por Pagar')
+  if (venta.anulada) throw new Error('La venta está anulada')
+  if (venta.retiroFecha) throw new Error('La carga ya fue retirada')
+  if (!comprobante) throw new Error('Debes ingresar el N° de comprobante')
+  if (!nombre) throw new Error('Debes ingresar el nombre de quien retira')
+  if (!validarRut(datos.rut)) throw new Error('El RUT no es válido')
+  const retirada = await api.ventas.registrarRetiro(venta.id, {
+    comprobante,
+    nombre,
+    rut: formatearRut(datos.rut),
+    metodoPago: datos.metodoPago,
+    usuarioId: usuario.id,
+    usuarioNombre: usuario.nombre,
+  })
+  await auditar(
+    usuario,
+    'retirar_carga',
+    `Retiro de boleta ${venta.numeroBoleta} — ${nombre} (${formatearRut(datos.rut)}) — ${formatoMonto(venta.monto)} (${etiquetaMetodo(datos.metodoPago)}) — Comprobante ${comprobante}`,
+    venta.id,
+    'ventas',
+  )
+  return retirada
+}
+
 // ── Cálculos (puros) ────────────────────────────────────────────────────────────
 
 export interface ResumenCaja {
@@ -59,14 +117,15 @@ export interface ResumenCaja {
 }
 
 /**
- * Regla de negocio: solo suman ventas no anuladas de tipo 'venta'
- * (por_pagar / por_facturar no generan ingreso de caja).
+ * Regla de negocio: suman las ventas no anuladas de tipo 'venta' (por_pagar / por_facturar no generan
+ * ingreso al venderse) y los retiros Por Pagar cobrados en el período, según su método de cobro.
  */
-export function resumenCaja(ventas: Venta[]): ResumenCaja {
+export function resumenCaja(ventas: Venta[], retiros: Venta[] = []): ResumenCaja {
   const activas = ventas.filter((v) => !v.anulada && v.tipoVenta === 'venta')
   const anuladas = ventas.filter((v) => v.anulada)
-  const efectivo = activas.filter((v) => v.metodoPago === 'efectivo')
-  const tarjeta = activas.filter((v) => v.metodoPago === 'tarjeta')
+  const cobrados = retiros.filter((v) => !v.anulada && v.retiroFecha)
+  const efectivo = [...activas.filter((v) => v.metodoPago === 'efectivo'), ...cobrados.filter((v) => v.retiroMetodoPago === 'efectivo')]
+  const tarjeta = [...activas.filter((v) => v.metodoPago === 'tarjeta'), ...cobrados.filter((v) => v.retiroMetodoPago === 'tarjeta')]
   const suma = (l: Venta[]) => l.reduce((s, v) => s + v.monto, 0)
   return {
     totalEfectivo: suma(efectivo),

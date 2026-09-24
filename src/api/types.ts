@@ -1,5 +1,6 @@
 import type {
   DatosGuardarUsuario,
+  DatosRetiro,
   FiltroAuditoria,
   FiltroVentas,
   NuevaVenta,
@@ -30,6 +31,8 @@ export interface Api {
     crear(v: NuevaVenta): Promise<Venta>
     /** Única modificación permitida sobre una venta. */
     anular(id: string, motivo: string, usuarioNombre: string): Promise<Venta>
+    /** Registra el retiro de una carga Por Pagar (una sola vez): comprobante, retirante, cobro y fecha de hoy. */
+    registrarRetiro(id: string, datos: DatosRetiro): Promise<Venta>
     peekNumeroBoleta(sucursal: Sucursal): Promise<string>
   }
   usuarios: {

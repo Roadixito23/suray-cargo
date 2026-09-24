@@ -24,7 +24,7 @@ create table ventas (
   id text primary key default gen_random_uuid()::text,
   numero_boleta text not null unique,
   monto numeric not null,
-  metodo_pago text not null check (metodo_pago in ('efectivo', 'tarjeta')),
+  metodo_pago text not null check (metodo_pago in ('efectivo', 'tarjeta', 'por_pagar')),
   fecha timestamptz not null default now(),
   descripcion text,
   destino text not null check (destino in ('aysen', 'coyhaique')),
@@ -36,12 +36,19 @@ create table ventas (
   remitente text not null,
   usuario_id text not null, -- sin FK: una venta conserva su usuario aunque este se elimine luego
   usuario_nombre text not null,
-  numero_operacion text,
+  numero_comprobante text,
   anulada boolean not null default false,
   motivo_anulacion text,
   fecha_anulacion timestamptz,
   usuario_anulacion text,
-  tipo_venta text not null check (tipo_venta in ('venta', 'por_pagar', 'por_facturar'))
+  tipo_venta text not null check (tipo_venta in ('venta', 'por_pagar', 'por_facturar')),
+  -- Retiro de una carga Por Pagar en el destino (se completa una sola vez, ver trigger).
+  retiro_fecha timestamptz,
+  retiro_nombre text,
+  retiro_rut text,
+  retiro_metodo_pago text check (retiro_metodo_pago in ('efectivo', 'tarjeta')),
+  retiro_usuario_id text,
+  retiro_usuario_nombre text
 );
 
 create table auditoria (
@@ -77,13 +84,24 @@ begin
 
   if (new.numero_boleta, new.monto, new.metodo_pago, new.fecha, new.destino, new.item, new.cantidad,
       new.tipo_producto, new.tipos_articulos, new.destinatario, new.remitente, new.usuario_id,
-      new.usuario_nombre, new.numero_operacion, new.tipo_venta)
+      new.usuario_nombre, new.tipo_venta)
      is distinct from
      (old.numero_boleta, old.monto, old.metodo_pago, old.fecha, old.destino, old.item, old.cantidad,
       old.tipo_producto, old.tipos_articulos, old.destinatario, old.remitente, old.usuario_id,
-      old.usuario_nombre, old.numero_operacion, old.tipo_venta)
+      old.usuario_nombre, old.tipo_venta)
   then
-    raise exception 'Solo se pueden modificar los campos de anulación de una venta';
+    raise exception 'Solo se pueden modificar los campos de anulación y de retiro de una venta';
+  end if;
+
+  -- Comprobante y datos de retiro: solo se completan una vez, en una carga Por Pagar vigente y aún sin retirar.
+  if (new.numero_comprobante, new.retiro_fecha, new.retiro_nombre, new.retiro_rut, new.retiro_metodo_pago,
+      new.retiro_usuario_id, new.retiro_usuario_nombre)
+     is distinct from
+     (old.numero_comprobante, old.retiro_fecha, old.retiro_nombre, old.retiro_rut, old.retiro_metodo_pago,
+      old.retiro_usuario_id, old.retiro_usuario_nombre)
+     and not (old.tipo_venta = 'por_pagar' and old.retiro_fecha is null and not old.anulada)
+  then
+    raise exception 'La carga no admite registrar un retiro (no es Por Pagar, está anulada o ya fue retirada)';
   end if;
   return new;
 end;
@@ -145,12 +163,12 @@ begin
 
   insert into ventas (
     numero_boleta, monto, metodo_pago, descripcion, destino, item, cantidad, tipo_producto,
-    tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_operacion, tipo_venta
+    tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_comprobante, tipo_venta
   ) values (
     v_prefijo || '-' || lpad(v_num::text, 6, '0'), (v ->> 'monto')::numeric, v ->> 'metodoPago',
     v ->> 'descripcion', v ->> 'destino', v ->> 'item', v ->> 'cantidad', v ->> 'tipoProducto',
     v -> 'tiposArticulos', v ->> 'destinatario', v ->> 'remitente', v ->> 'usuarioId',
-    v ->> 'usuarioNombre', v ->> 'numeroOperacion', v ->> 'tipoVenta'
+    v ->> 'usuarioNombre', v ->> 'numeroComprobante', v ->> 'tipoVenta'
   ) returning * into fila;
 
   return fila;
@@ -211,24 +229,29 @@ begin
   for r in select * from jsonb_array_elements(coalesce(p_datos -> 'ventas', '[]'::jsonb)) loop
     insert into ventas (
       id, numero_boleta, monto, metodo_pago, fecha, descripcion, destino, item, cantidad, tipo_producto,
-      tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_operacion,
-      anulada, motivo_anulacion, fecha_anulacion, usuario_anulacion, tipo_venta
+      tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_comprobante,
+      anulada, motivo_anulacion, fecha_anulacion, usuario_anulacion, tipo_venta,
+      retiro_fecha, retiro_nombre, retiro_rut, retiro_metodo_pago, retiro_usuario_id, retiro_usuario_nombre
     ) values (
       r ->> 'id', r ->> 'numeroBoleta', (r ->> 'monto')::numeric, r ->> 'metodoPago', (r ->> 'fecha')::timestamptz,
       r ->> 'descripcion', r ->> 'destino', r ->> 'item', r ->> 'cantidad', r ->> 'tipoProducto',
       r -> 'tiposArticulos', r ->> 'destinatario', r ->> 'remitente', r ->> 'usuarioId', r ->> 'usuarioNombre',
-      r ->> 'numeroOperacion', coalesce((r ->> 'anulada')::boolean, false), r ->> 'motivoAnulacion',
-      (r ->> 'fechaAnulacion')::timestamptz, r ->> 'usuarioAnulacion', r ->> 'tipoVenta'
+      coalesce(r ->> 'numeroComprobante', r ->> 'numeroOperacion'), coalesce((r ->> 'anulada')::boolean, false), r ->> 'motivoAnulacion',
+      (r ->> 'fechaAnulacion')::timestamptz, r ->> 'usuarioAnulacion', r ->> 'tipoVenta',
+      (r ->> 'retiroFecha')::timestamptz, r ->> 'retiroNombre', r ->> 'retiroRut', r ->> 'retiroMetodoPago',
+      r ->> 'retiroUsuarioId', r ->> 'retiroUsuarioNombre'
     )
     on conflict (id) do update set
       numero_boleta = excluded.numero_boleta, monto = excluded.monto, metodo_pago = excluded.metodo_pago,
       fecha = excluded.fecha, descripcion = excluded.descripcion, destino = excluded.destino, item = excluded.item,
       cantidad = excluded.cantidad, tipo_producto = excluded.tipo_producto, tipos_articulos = excluded.tipos_articulos,
       destinatario = excluded.destinatario, remitente = excluded.remitente, usuario_id = excluded.usuario_id,
-      usuario_nombre = excluded.usuario_nombre, numero_operacion = excluded.numero_operacion,
+      usuario_nombre = excluded.usuario_nombre, numero_comprobante = excluded.numero_comprobante,
       anulada = excluded.anulada, motivo_anulacion = excluded.motivo_anulacion,
       fecha_anulacion = excluded.fecha_anulacion, usuario_anulacion = excluded.usuario_anulacion,
-      tipo_venta = excluded.tipo_venta;
+      tipo_venta = excluded.tipo_venta, retiro_fecha = excluded.retiro_fecha, retiro_nombre = excluded.retiro_nombre,
+      retiro_rut = excluded.retiro_rut, retiro_metodo_pago = excluded.retiro_metodo_pago,
+      retiro_usuario_id = excluded.retiro_usuario_id, retiro_usuario_nombre = excluded.retiro_usuario_nombre;
     v_num_ventas := v_num_ventas + 1;
 
     v_pref := split_part(r ->> 'numeroBoleta', '-', 1);

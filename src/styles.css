@@ -184,6 +184,7 @@ tr.anulada td.acciones, tr.anulada td:first-child { text-decoration: none; }
 .ticket-trans-num { font-size: 14pt; font-weight: 700; }
 .ticket hr { border-top: 1px solid #000; margin: 8px 0; }
 .ticket-campo { display: flex; gap: 6px; margin-bottom: 8px; }
+.ticket-seccion { font-weight: 700; text-transform: uppercase; text-align: center; margin-bottom: 8px; }
 .ticket-etiqueta { width: 100px; flex: none; font-weight: 700; }
 .ticket-valor { flex: 1; word-break: break-word; }
 .ticket-valor.fuerte { font-weight: 700; }

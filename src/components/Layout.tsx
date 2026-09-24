@@ -6,11 +6,13 @@ import { nombreSucursal } from '../lib/format'
 import { EstadoConexion } from './EstadoConexion'
 import { MigracionLocal } from './MigracionLocal'
 import { Modal } from './Modal'
+import { APP_VERSION } from '../version'
 
 const RUTAS = [
   { to: '/ventas', texto: 'Registro de Ventas' },
   { to: '/cierre', texto: 'Cierre de Caja' },
   { to: '/buscar', texto: 'Buscar Envío' },
+  { to: '/retiro-por-pagar', texto: 'Registrar Carga Por Pagar' },
   { to: '/reimprimir', texto: 'Reimprimir' },
   { to: '/anular', texto: 'Anular Venta' },
   { to: '/historico', texto: 'Histórico de Cierres' },
@@ -20,8 +22,6 @@ const RUTAS_ADMIN = [
   { to: '/admin/usuarios', texto: 'Usuarios' },
   { to: '/admin/respaldos', texto: 'Respaldos' },
 ]
-
-const VERSION = 'V.24.09.2601'
 
 export function Layout() {
   const { usuario, logout } = useAuth()
@@ -48,7 +48,7 @@ export function Layout() {
           <div>
             <strong>Suray Cargo</strong>
             <small>Sistema de Gestión</small>
-            <small className="version">{VERSION}</small>
+            <small className="version">{APP_VERSION}</small>
           </div>
         </div>
         <nav>

@@ -48,13 +48,23 @@ let listo = asegurarAdmin()
 export const localApi: Api = {
   ventas: {
     async listar(filtro: FiltroVentas = {}) {
-      const { desde, hasta, usuarioId } = filtro
+      const { desde, hasta, usuarioId, porPagarDestino, retiroUsuarioId, retiroDesde, retiroHasta } = filtro
       return leer<Venta[]>(K.ventas, [])
         .filter((v) => {
           const t = new Date(v.fecha).getTime()
           if (desde && t < desde.getTime()) return false
           if (hasta && t > hasta.getTime()) return false
-          if (usuarioId && v.usuarioId !== usuarioId) return false
+          if (usuarioId && v.usuarioId !== usuarioId) {
+            const ajenaVisible = porPagarDestino && v.tipoVenta === 'por_pagar' && v.destino === porPagarDestino
+            if (!ajenaVisible) return false
+          }
+          if (retiroUsuarioId && v.retiroUsuarioId !== retiroUsuarioId) return false
+          if (retiroDesde || retiroHasta) {
+            if (!v.retiroFecha) return false
+            const r = new Date(v.retiroFecha).getTime()
+            if (retiroDesde && r < retiroDesde.getTime()) return false
+            if (retiroHasta && r > retiroHasta.getTime()) return false
+          }
           return true
         })
         .sort((a, b) => b.fecha.localeCompare(a.fecha))
@@ -78,6 +88,12 @@ export const localApi: Api = {
         motivoAnulacion: null,
         fechaAnulacion: null,
         usuarioAnulacion: null,
+        retiroFecha: null,
+        retiroNombre: null,
+        retiroRut: null,
+        retiroMetodoPago: null,
+        retiroUsuarioId: null,
+        retiroUsuarioNombre: null,
       }
       const ventas = leer<Venta[]>(K.ventas, [])
       ventas.push(venta)
@@ -95,6 +111,24 @@ export const localApi: Api = {
       v.motivoAnulacion = motivo
       v.fechaAnulacion = new Date().toISOString()
       v.usuarioAnulacion = usuarioNombre
+      guardar(K.ventas, ventas)
+      return v
+    },
+
+    async registrarRetiro(id, datos) {
+      const ventas = leer<Venta[]>(K.ventas, [])
+      const v = ventas.find((x) => x.id === id)
+      if (!v) throw new Error('Venta no encontrada')
+      if (v.tipoVenta !== 'por_pagar') throw new Error('La venta no es Por Pagar')
+      if (v.anulada) throw new Error('La venta está anulada')
+      if (v.retiroFecha) throw new Error('La carga ya fue retirada')
+      v.numeroComprobante = datos.comprobante
+      v.retiroFecha = new Date().toISOString()
+      v.retiroNombre = datos.nombre
+      v.retiroRut = datos.rut
+      v.retiroMetodoPago = datos.metodoPago
+      v.retiroUsuarioId = datos.usuarioId
+      v.retiroUsuarioNombre = datos.usuarioNombre
       guardar(K.ventas, ventas)
       return v
     },

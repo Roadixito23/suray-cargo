@@ -9,6 +9,7 @@ export function BuscarPage() {
   return (
     <>
       <VentasExplorer
+        incluirPorPagar
         acciones={(v) => (
           <button className="btn" onClick={() => setDetalle(v)}>Ver detalle</button>
         )}
