@@ -41,7 +41,7 @@ export function RespaldosPage() {
       <div className="tarjetas">
         <div className="tarjeta">
           <strong>Respaldo completo (JSON)</strong>
-          <small>Ventas y usuarios. Compatible con los respaldos de la app Flutter.</small>
+          <small>Ventas y usuarios en un único archivo.</small>
           <button className="btn primario" onClick={() => ejecutar(() => descargarRespaldo(actor), 'Respaldo descargado')}>Descargar respaldo</button>
         </div>
         <div className="tarjeta">

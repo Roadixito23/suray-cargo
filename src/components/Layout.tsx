@@ -18,6 +18,8 @@ const RUTAS_ADMIN = [
   { to: '/admin/respaldos', texto: 'Respaldos' },
 ]
 
+const VERSION = 'V.24.09.2601'
+
 export function Layout() {
   const { usuario, logout } = useAuth()
   const navigate = useNavigate()
@@ -43,6 +45,7 @@ export function Layout() {
           <div>
             <strong>Suray Cargo</strong>
             <small>Sistema de Gestión</small>
+            <small className="version">{VERSION}</small>
           </div>
         </div>
         <nav>

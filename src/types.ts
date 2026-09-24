@@ -1,4 +1,4 @@
-// Mismos nombres de campo que la app Flutter, para que los respaldos JSON sean compatibles.
+// Nombres de campo estables: los respaldos JSON dependen de ellos.
 
 export type Sucursal = 'aysen' | 'coyhaique'
 export type MetodoPago = 'efectivo' | 'tarjeta'
@@ -51,6 +51,12 @@ export interface Usuario {
 }
 
 export type UsuarioSesion = Omit<Usuario, 'contrasena'>
+
+/** Para guardar sin tener que leer de vuelta el hash existente (nunca sale por SELECT). */
+export type DatosGuardarUsuario = Omit<Usuario, 'contrasena'> & {
+  /** null = no cambiar la contraseña actual. */
+  contrasenaHash: string | null
+}
 
 export type AccionAuditoria =
   | 'login'

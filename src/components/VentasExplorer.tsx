@@ -13,8 +13,8 @@ interface Props {
 }
 
 /**
- * Listado filtrable de ventas compartido por Buscar / Reimprimir / Anular
- * (en Flutter esta lógica estaba triplicada). Alcance por rol vía `listarVentas`.
+ * Listado filtrable de ventas compartido por Buscar / Reimprimir / Anular.
+ * Alcance por rol vía `listarVentas`.
  */
 export function VentasExplorer({ acciones, soloActivas }: Props) {
   const usuario = useUsuario()

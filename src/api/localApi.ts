@@ -117,11 +117,22 @@ export const localApi: Api = {
       await listo
       return leer<Usuario[]>(K.usuarios, []).find((u) => u.id === id) ?? null
     },
-    async guardar(u) {
+    async verificarLogin(login, hash) {
+      await listo
+      const u = leer<Usuario[]>(K.usuarios, []).find((x) => x.usuario === login && x.contrasena === hash)
+      if (!u) return null
+      const { contrasena: _c, ...resto } = u
+      return resto
+    },
+    async guardar(datos) {
+      const { contrasenaHash, ...resto } = datos
       const usuarios = leer<Usuario[]>(K.usuarios, [])
-      const i = usuarios.findIndex((x) => x.id === u.id)
-      if (i >= 0) usuarios[i] = u
-      else usuarios.push(u)
+      const i = usuarios.findIndex((x) => x.id === resto.id)
+      if (i >= 0) usuarios[i] = { ...resto, contrasena: contrasenaHash ?? usuarios[i].contrasena }
+      else {
+        if (!contrasenaHash) throw new Error('La contraseña es obligatoria')
+        usuarios.push({ ...resto, contrasena: contrasenaHash })
+      }
       guardar(K.usuarios, usuarios)
     },
     async eliminar(id) {

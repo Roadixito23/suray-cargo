@@ -9,11 +9,10 @@ const CLAVE_SESION = 'sesion'
 export const sinContrasena = ({ contrasena: _c, ...resto }: Usuario): UsuarioSesion => resto
 
 export async function login(login: string, contrasena: string): Promise<UsuarioSesion | null> {
-  const u = await api.usuarios.buscarPorLogin(login.trim())
-  if (!u || u.contrasena !== (await sha256(contrasena))) return null
-  const sesion = sinContrasena(u)
-  guardar(CLAVE_SESION, { usuarioId: u.id })
-  await auditar(sesion, 'login', `Inicio de sesión — ${u.nombre} (${u.usuario})`)
+  const sesion = await api.usuarios.verificarLogin(login.trim(), await sha256(contrasena))
+  if (!sesion) return null
+  guardar(CLAVE_SESION, { usuarioId: sesion.id })
+  await auditar(sesion, 'login', `Inicio de sesión — ${sesion.nombre} (${sesion.usuario})`)
   return sesion
 }
 
@@ -50,11 +49,11 @@ export async function guardarUsuario(actor: UsuarioSesion, datos: DatosUsuario):
   if (duplicado && duplicado.id !== datos.id) throw new Error('Ese nombre de usuario ya existe')
   if (!existente && !datos.contrasena) throw new Error('La contraseña es obligatoria')
 
-  const usuario: Usuario = {
+  const usuario = {
     id: existente?.id ?? `${Date.now()}`,
     nombre,
     usuario: login,
-    contrasena: datos.contrasena ? await sha256(datos.contrasena) : existente!.contrasena,
+    contrasenaHash: datos.contrasena ? await sha256(datos.contrasena) : null,
     esAdmin: datos.esAdmin,
     sucursal: datos.sucursal,
     fechaCreacion: existente?.fechaCreacion ?? new Date().toISOString(),

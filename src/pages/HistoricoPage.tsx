@@ -9,7 +9,7 @@ const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 const mesLargo = new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric' })
 const diaLargo = new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-/** Los "cierres" se derivan de las ventas por fecha (igual que en la app Flutter). */
+/** Los "cierres" se derivan de las ventas por fecha. */
 export function HistoricoPage() {
   const usuario = useUsuario()
   const hoy = useMemo(() => inicioDelDia(new Date()), [])

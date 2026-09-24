@@ -3,7 +3,7 @@ import { claveDia } from '../lib/fechas'
 import type { Respaldo, UsuarioSesion, Venta } from '../types'
 import { auditar } from './auditoria'
 
-/** Descarga un Blob como archivo (reemplaza al guardado en disco de Flutter). */
+/** Descarga un Blob como archivo. */
 export function descargar(nombre: string, contenido: string, tipo: string): void {
   const url = URL.createObjectURL(new Blob([contenido], { type: tipo }))
   const a = document.createElement('a')

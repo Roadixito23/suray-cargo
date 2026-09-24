@@ -1,4 +1,5 @@
 import type {
+  DatosGuardarUsuario,
   FiltroAuditoria,
   FiltroVentas,
   NuevaVenta,
@@ -6,13 +7,13 @@ import type {
   Respaldo,
   Sucursal,
   Usuario,
+  UsuarioSesion,
   Venta,
 } from '../types'
 
 /**
- * Contrato del backend. Hoy lo implementa `localApi` (localStorage).
- * Cuando exista el backend real: crear `httpApi.ts` con la misma forma y
- * cambiar el export en `api/index.ts`. Nada más en la app toca el almacenamiento.
+ * Contrato del backend. Hoy lo implementa `localApi` (localStorage) y `httpApi` (Supabase).
+ * Cambiar el export en `api/index.ts`. Nada más en la app toca el almacenamiento.
  */
 export interface Api {
   ventas: {
@@ -28,7 +29,9 @@ export interface Api {
     listar(): Promise<Usuario[]>
     buscarPorLogin(usuario: string): Promise<Usuario | null>
     obtener(id: string): Promise<Usuario | null>
-    guardar(u: Usuario): Promise<void>
+    /** Compara el hash server-side; nunca expone la columna contraseña. */
+    verificarLogin(usuario: string, contrasenaHash: string): Promise<UsuarioSesion | null>
+    guardar(u: DatosGuardarUsuario): Promise<void>
     eliminar(id: string): Promise<void>
   }
   auditoria: {
