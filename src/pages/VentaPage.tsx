@@ -5,6 +5,7 @@ import { useImprimir } from '../components/PrintContext'
 import { Ticket, TicketsVenta, type DatosTicket } from '../components/Ticket'
 import { useToast } from '../components/Toast'
 import { formatoMonto, nombreSucursal, sucursalOpuesta } from '../lib/format'
+import { guardar, leer } from '../lib/storage'
 import { registrarVenta, resumenCaja, ventasDelDia } from '../services/ventas'
 import type { MetodoPago, Sucursal, TipoArticulo, Venta } from '../types'
 
@@ -28,7 +29,7 @@ export function VentaPage() {
 
   const [autoItem, setAutoItem] = useState(true)
   const [itemManual, setItemManual] = useState('')
-  const [autoOp, setAutoOp] = useState(false)
+  const [autoOp, setAutoOp] = useState(() => leer('autoOp', true))
   const [opManual, setOpManual] = useState('')
   const [cantidad, setCantidad] = useState('1')
   const [tipoProducto, setTipoProducto] = useState('')
@@ -55,6 +56,10 @@ export function VentaPage() {
     const t = setInterval(() => setAhora(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
+
+  useEffect(() => {
+    guardar('autoOp', autoOp)
+  }, [autoOp])
 
   // Una fila (tipo + precio) por paquete cuando cantidad > 1.
   useEffect(() => {
@@ -122,7 +127,7 @@ export function VentaPage() {
         remitente: remitente.trim(),
         usuarioId: usuario.id,
         usuarioNombre: usuario.nombre,
-        numeroOperacion: metodo === 'tarjeta' && numeroOperacion.trim() ? numeroOperacion.trim() : null,
+        numeroOperacion: numeroOperacion.trim() ? numeroOperacion.trim() : null,
         tipoVenta: 'venta',
       })
       toast(`Venta #${venta.numeroBoleta} registrada: ${formatoMonto(venta.monto)}`)
@@ -280,16 +285,14 @@ export function VentaPage() {
           </div>
         </div>
 
-        {metodo === 'tarjeta' && (
-          <label className="campo">
-            <span className="etiqueta">N° de operación</span>
-            <input value={numeroOperacion} readOnly={autoOp} onChange={(e) => setOpManual(e.target.value)} />
-            <label className="check">
-              <input type="checkbox" checked={autoOp} onChange={(e) => setAutoOp(e.target.checked)} />
-              Autoincrementar por día
-            </label>
+        <label className="campo">
+          <span className="etiqueta">N° de operación</span>
+          <input value={numeroOperacion} readOnly={autoOp} onChange={(e) => setOpManual(e.target.value)} />
+          <label className="check">
+            <input type="checkbox" checked={autoOp} onChange={(e) => setAutoOp(e.target.checked)} />
+            Autoincrementar por venta
           </label>
-        )}
+        </label>
 
         <button className="btn primario grande" disabled={!completo || guardando}>
           {guardando ? 'Guardando…' : 'Registrar venta e imprimir'}
