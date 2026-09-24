@@ -68,6 +68,7 @@ export type AccionAuditoria =
   | 'eliminar_usuario'
   | 'crear_respaldo'
   | 'restaurar_respaldo'
+  | 'migrar_usuarios_locales'
 
 export interface RegistroAuditoria {
   id: string

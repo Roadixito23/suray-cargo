@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { usaBaseRemota } from '../api'
 import { nombreSucursal } from '../lib/format'
+import { EstadoConexion } from './EstadoConexion'
+import { MigracionLocal } from './MigracionLocal'
 import { Modal } from './Modal'
 
 const RUTAS = [
@@ -62,6 +65,7 @@ export function Layout() {
         <header className="barra">
           <button className="hamburguesa" aria-label="Menú" onClick={() => setMenu((m) => !m)}>Menú</button>
           <h1>{titulo}</h1>
+          {usuario.esAdmin && usaBaseRemota && <EstadoConexion />}
           <span className="usuario-info">
             {usuario.nombre} · {usuario.esAdmin ? 'Administrador' : nombreSucursal(usuario.sucursal)}
           </span>
@@ -70,6 +74,8 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {usuario.esAdmin && usaBaseRemota && <MigracionLocal />}
 
       {confirmar && (
         <Modal

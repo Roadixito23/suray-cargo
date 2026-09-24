@@ -11,6 +11,13 @@ import type {
   Venta,
 } from '../types'
 
+export interface EstadoConexion {
+  /** ok = responde bien; lento = responde pero tarda; error = sin conexión o la base rechaza la consulta. */
+  estado: 'ok' | 'lento' | 'error'
+  ms: number
+  detalle?: string
+}
+
 /**
  * Contrato del backend. Hoy lo implementa `localApi` (localStorage) y `httpApi` (Supabase).
  * Cambiar el export en `api/index.ts`. Nada más en la app toca el almacenamiento.
@@ -37,6 +44,10 @@ export interface Api {
   auditoria: {
     registrar(r: Omit<RegistroAuditoria, 'id' | 'timestamp'>): Promise<void>
     listar(filtro?: FiltroAuditoria): Promise<RegistroAuditoria[]>
+  }
+  conexion: {
+    /** Consulta liviana para saber si la base responde. Nunca lanza: los fallos vuelven como estado 'error'. */
+    verificar(): Promise<EstadoConexion>
   }
   respaldo: {
     exportar(): Promise<Respaldo>

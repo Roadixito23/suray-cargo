@@ -88,6 +88,17 @@ button.nav.salir { color: var(--rojo); }
 }
 .barra h1 { font-size: 1.15rem; margin: 0; flex: 1; }
 .usuario-info { color: var(--sub); font-size: .85rem; }
+/* Indicador discreto de conexión (solo administradores) */
+.conexion-dot {
+  width: 9px; height: 9px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; flex: none;
+  background: #b0b6c8; opacity: .75;
+}
+.conexion-dot:hover { opacity: 1; }
+.conexion-dot.ok { background: var(--verde); }
+.conexion-dot.lento { background: #f9a825; }
+.conexion-dot.error { background: var(--rojo); }
+.conexion-dot.verificando { animation: conexion-pulso 1.2s ease-in-out infinite; }
+@keyframes conexion-pulso { 50% { opacity: .3; } }
 .hamburguesa { display: none; border: 0; background: none; font-size: 1.4rem; cursor: pointer; }
 main { padding: 1.25rem; }
 

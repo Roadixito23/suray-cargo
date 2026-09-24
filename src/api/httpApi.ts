@@ -206,6 +206,27 @@ export const httpApi: Api = {
     },
   },
 
+  conexion: {
+    async verificar() {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return { estado: 'error', ms: 0, detalle: 'Sin conexión a internet' }
+      }
+      const t0 = performance.now()
+      try {
+        const { error } = await supabase
+          .from('contadores')
+          .select('sucursal')
+          .limit(1)
+          .abortSignal(AbortSignal.timeout(8000))
+        const ms = Math.round(performance.now() - t0)
+        if (error) return { estado: 'error', ms, detalle: error.message }
+        return { estado: ms > 1500 ? 'lento' : 'ok', ms }
+      } catch (e) {
+        return { estado: 'error', ms: Math.round(performance.now() - t0), detalle: (e as Error).message }
+      }
+    },
+  },
+
   respaldo: {
     async exportar() {
       // Única vía que sí puede leer los hashes de contraseña (RPC security definer, ver schema.sql).

@@ -125,6 +125,7 @@ export const localApi: Api = {
       return resto
     },
     async guardar(datos) {
+      await listo
       const { contrasenaHash, ...resto } = datos
       const usuarios = leer<Usuario[]>(K.usuarios, [])
       const i = usuarios.findIndex((x) => x.id === resto.id)
@@ -163,6 +164,12 @@ export const localApi: Api = {
         })
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
         .slice(0, limit)
+    },
+  },
+
+  conexion: {
+    async verificar() {
+      return { estado: 'ok', ms: 0, detalle: 'Modo local (sin base de datos)' }
     },
   },
 
