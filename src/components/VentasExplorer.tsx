@@ -12,15 +12,15 @@ interface Props {
   acciones(v: Venta, recargar: () => void): ReactNode
   /** Si es true, oculta las anuladas. */
   soloActivas?: boolean
-  /** Buscar Envío: suma las cargas Por Pagar que llegan a la sucursal y los retiros del rango. */
-  incluirPorPagar?: boolean
+  /** Buscar Envío: suma los envíos de otras sucursales que llegan a la del usuario y los retiros del rango. */
+  incluirLlegadas?: boolean
 }
 
 /**
  * Listado filtrable de ventas compartido por Buscar / Reimprimir / Anular.
  * Alcance por rol vía `listarVentas`.
  */
-export function VentasExplorer({ acciones, soloActivas, incluirPorPagar }: Props) {
+export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props) {
   const usuario = useUsuario()
   const hoy = aInputDate(new Date())
   const [desde, setDesde] = useState(hoy)
@@ -39,10 +39,10 @@ export function VentasExplorer({ acciones, soloActivas, incluirPorPagar }: Props
     const porFecha = listarVentas(usuario, {
       desde: d,
       hasta: fin,
-      ...(incluirPorPagar ? { porPagarDestino: usuario.sucursal } : {}),
+      ...(incluirLlegadas ? { destinoLlegada: usuario.sucursal } : {}),
     })
     // Un envío Por Pagar puede venderse un día y retirarse otro: también se buscan por fecha de retiro.
-    const porRetiro = incluirPorPagar
+    const porRetiro = incluirLlegadas
       ? api.ventas.listar({
           retiroDesde: d,
           retiroHasta: fin,
@@ -55,7 +55,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirPorPagar }: Props
         setVentas([...a, ...b.filter((v) => !ids.has(v.id))].sort((x, y) => y.fecha.localeCompare(x.fecha)))
       })
       .finally(() => setCargando(false))
-  }, [usuario, desde, hasta, incluirPorPagar])
+  }, [usuario, desde, hasta, incluirLlegadas])
 
   useEffect(recargar, [recargar])
 
@@ -82,7 +82,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirPorPagar }: Props
       <div className="filtros">
         <input
           type="search"
-          placeholder={incluirPorPagar ? 'Boleta, nombre, RUT o comprobante' : 'Boleta, destinatario o remitente'}
+          placeholder={incluirLlegadas ? 'Boleta, nombre, RUT o comprobante' : 'Boleta, destinatario o remitente'}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           aria-label="Buscar"

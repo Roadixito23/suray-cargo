@@ -48,14 +48,16 @@ let listo = asegurarAdmin()
 export const localApi: Api = {
   ventas: {
     async listar(filtro: FiltroVentas = {}) {
-      const { desde, hasta, usuarioId, porPagarDestino, retiroUsuarioId, retiroDesde, retiroHasta } = filtro
+      const { desde, hasta, usuarioId, porPagarDestino, destinoLlegada, retiroUsuarioId, retiroDesde, retiroHasta } = filtro
       return leer<Venta[]>(K.ventas, [])
         .filter((v) => {
           const t = new Date(v.fecha).getTime()
           if (desde && t < desde.getTime()) return false
           if (hasta && t > hasta.getTime()) return false
           if (usuarioId && v.usuarioId !== usuarioId) {
-            const ajenaVisible = porPagarDestino && v.tipoVenta === 'por_pagar' && v.destino === porPagarDestino
+            const ajenaVisible =
+              (porPagarDestino && v.tipoVenta === 'por_pagar' && v.destino === porPagarDestino) ||
+              (destinoLlegada && v.destino === destinoLlegada)
             if (!ajenaVisible) return false
           }
           if (retiroUsuarioId && v.retiroUsuarioId !== retiroUsuarioId) return false

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { SelectorTema } from '../components/SelectorTema'
 
 export function LoginPage() {
   const { usuario, cargando, login } = useAuth()
@@ -24,7 +25,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="login-fondo" style={{ backgroundImage: 'url(/assets/login_bg.png)' }}>
+    <div className="login-fondo">
+      <SelectorTema className="en-login" />
       <div className="login-card">
         <div className="login-izq">
           <img src="/assets/logo/logo.png" alt="Suray Cargo" />

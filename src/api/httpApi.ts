@@ -79,9 +79,10 @@ export const httpApi: Api = {
       if (filtro.desde) q = q.gte('fecha', filtro.desde.toISOString())
       if (filtro.hasta) q = q.lte('fecha', filtro.hasta.toISOString())
       if (filtro.usuarioId) {
-        q = filtro.porPagarDestino
-          ? q.or(`usuario_id.eq.${filtro.usuarioId},and(tipo_venta.eq.por_pagar,destino.eq.${filtro.porPagarDestino})`)
-          : q.eq('usuario_id', filtro.usuarioId)
+        const alternativas = [`usuario_id.eq.${filtro.usuarioId}`]
+        if (filtro.porPagarDestino) alternativas.push(`and(tipo_venta.eq.por_pagar,destino.eq.${filtro.porPagarDestino})`)
+        if (filtro.destinoLlegada) alternativas.push(`destino.eq.${filtro.destinoLlegada}`)
+        q = alternativas.length > 1 ? q.or(alternativas.join(',')) : q.eq('usuario_id', filtro.usuarioId)
       }
       if (filtro.retiroUsuarioId) q = q.eq('retiro_usuario_id', filtro.retiroUsuarioId)
       if (filtro.retiroDesde) q = q.gte('retiro_fecha', filtro.retiroDesde.toISOString())

@@ -6,6 +6,7 @@ import { nombreSucursal } from '../lib/format'
 import { EstadoConexion } from './EstadoConexion'
 import { MigracionLocal } from './MigracionLocal'
 import { Modal } from './Modal'
+import { SelectorTema } from './SelectorTema'
 import { APP_VERSION } from '../version'
 
 const RUTAS = [
@@ -56,6 +57,7 @@ export function Layout() {
           {usuario.esAdmin && <hr />}
           {usuario.esAdmin && RUTAS_ADMIN.map(link)}
         </nav>
+        <SelectorTema className="en-lateral" />
         <button className="nav salir" onClick={() => setConfirmar(true)}>
           Cerrar Sesión
         </button>

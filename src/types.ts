@@ -118,6 +118,8 @@ export interface FiltroVentas {
   usuarioId?: string
   /** Amplía el alcance: además de lo propio, incluye las cargas Por Pagar con este destino. */
   porPagarDestino?: Sucursal
+  /** Amplía el alcance: además de lo propio, incluye todo envío que llega a esta sucursal. */
+  destinoLlegada?: Sucursal
   retiroUsuarioId?: string
   retiroDesde?: Date
   retiroHasta?: Date

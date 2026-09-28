@@ -142,6 +142,18 @@ describe('Por Pagar', () => {
   })
 })
 
+describe('envíos que llegan a la sucursal', () => {
+  it('un usuario de destino los encuentra con destinoLlegada, sin ampliar el alcance por defecto', async () => {
+    const receptor: UsuarioSesion = { ...cajero, id: 'u2', nombre: 'Receptor', usuario: 'rec', sucursal: 'aysen' }
+    await registrarVenta(cajero, base()) // coyhaique → aysen, efectivo
+    await registrarVenta(cajero, base({ destino: 'coyhaique' })) // no llega a Aysen
+    expect(await listarVentas(receptor)).toHaveLength(0)
+    const llegadas = await listarVentas(receptor, { destinoLlegada: 'aysen' })
+    expect(llegadas).toHaveLength(1)
+    expect(llegadas[0].destino).toBe('aysen')
+  })
+})
+
 describe('RUT', () => {
   it('valida dígito verificador y formatea', () => {
     expect(validarRut('12.345.678-5')).toBe(true)

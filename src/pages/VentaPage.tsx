@@ -6,10 +6,11 @@ import { Ticket, TicketsVenta, type DatosTicket } from '../components/Ticket'
 import { useToast } from '../components/Toast'
 import { etiquetaMetodo, formatoMonto, nombreSucursal, sucursalOpuesta } from '../lib/format'
 import { guardar, leer } from '../lib/storage'
-import { registrarVenta, resumenCaja, ventasDelDia } from '../services/ventas'
+import { registrarVenta, resumenCaja, retirosDelDia, ventasDelDia } from '../services/ventas'
 import type { MetodoPago, Sucursal, TipoArticulo, Venta } from '../types'
 
 const MAX_PAQUETES = 10
+const NUMERO_REFRESCO_MS = 15_000
 
 export function VentaPage() {
   const usuario = useUsuario()
@@ -17,6 +18,7 @@ export function VentaPage() {
   const imprimir = useImprimir()
 
   const [hoy, setHoy] = useState<Venta[]>([])
+  const [retiros, setRetiros] = useState<Venta[]>([])
   const [proximo, setProximo] = useState('')
   const [ahora, setAhora] = useState(() => new Date())
   const [guardando, setGuardando] = useState(false)
@@ -43,14 +45,38 @@ export function VentaPage() {
   const multi = n > 1
 
   const cargar = useCallback(async () => {
-    const [ventas, num] = await Promise.all([ventasDelDia(usuario), api.ventas.peekNumeroBoleta(usuario.sucursal)])
+    const [ventas, cobros, num] = await Promise.all([
+      ventasDelDia(usuario),
+      retirosDelDia(usuario),
+      api.ventas.peekNumeroBoleta(usuario.sucursal),
+    ])
     setHoy(ventas)
+    setRetiros(cobros)
     setProximo(num)
   }, [usuario])
+
+  // El correlativo es por sucursal: otros usuarios pueden vender mientras esta pantalla está abierta.
+  const refrescarNumero = useCallback(() => {
+    api.ventas.peekNumeroBoleta(usuario.sucursal).then(setProximo, () => {})
+  }, [usuario.sucursal])
 
   useEffect(() => {
     cargar()
   }, [cargar])
+
+  useEffect(() => {
+    const t = setInterval(refrescarNumero, NUMERO_REFRESCO_MS)
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') refrescarNumero()
+    }
+    window.addEventListener('focus', alVolver)
+    document.addEventListener('visibilitychange', alVolver)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('focus', alVolver)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
+  }, [refrescarNumero])
 
   useEffect(() => {
     const t = setInterval(() => setAhora(new Date()), 1000)
@@ -90,7 +116,7 @@ export function VentaPage() {
       ? articulos.length === n && articulos.every((a) => a.tipo.trim() !== '' && a.precio > 0)
       : tipoProducto.trim() !== '' && Number(monto) > 0)
 
-  const resumen = useMemo(() => resumenCaja(hoy), [hoy])
+  const resumen = useMemo(() => resumenCaja(hoy, retiros), [hoy, retiros])
 
   const vistaPrevia: DatosTicket = {
     numeroBoleta: proximo,
@@ -171,9 +197,9 @@ export function VentaPage() {
     <div className="venta-grid">
       <form className="panel" onSubmit={enviar} onKeyDown={alTeclear}>
         <div className="resumen-dia">
-          <span>Ventas de hoy: <strong>{hoy.length}</strong></span>
+          <span>Total Efectivo: <strong>{formatoMonto(resumen.totalEfectivo)}</strong></span>
+          <span>Total Tarjeta: <strong>{formatoMonto(resumen.totalTarjeta)}</strong></span>
           <span>Total hoy: <strong>{formatoMonto(resumen.totalGeneral)}</strong></span>
-          <span>Próxima boleta: <strong>{proximo}</strong></span>
         </div>
 
         <div className="campo">
@@ -317,6 +343,7 @@ export function VentaPage() {
         <div className="ticket-marco">
           <Ticket venta={vistaPrevia} paquete={Number(item) || 1} />
         </div>
+        <small>N° de transacción estimado: el definitivo lo asigna el sistema al guardar.</small>
         {multi && <small>Se imprimirán {n} tickets (uno por paquete).</small>}
       </aside>
     </div>

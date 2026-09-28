@@ -3,6 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f4f6fb" />
+    <script>
+      // Aplica el tema guardado antes de pintar, para evitar el destello de modo claro.
+      (function () {
+        try {
+          var p = JSON.parse(localStorage.getItem('suraycargo:tema'));
+          var oscuro = p === 'oscuro' || (p !== 'claro' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var r = document.documentElement;
+          r.dataset.tema = oscuro ? 'oscuro' : 'claro';
+          r.style.colorScheme = oscuro ? 'dark' : 'light';
+          if (oscuro) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0f1220');
+        } catch (e) {}
+      })();
+    </script>
     <link rel="icon" href="/assets/logo/favicon.png" />
     <title>Suray Cargo</title>
   </head>
