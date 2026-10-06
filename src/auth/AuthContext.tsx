@@ -18,6 +18,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     restaurarSesion()
       .then(setUsuario)
+      .catch((e) => {
+        // Sin conexión o sesión inválida: se muestra el login en vez de quedar "Cargando…".
+        console.error('No se pudo restaurar la sesión', e)
+        setUsuario(null)
+      })
       .finally(() => setCargando(false))
   }, [])
 

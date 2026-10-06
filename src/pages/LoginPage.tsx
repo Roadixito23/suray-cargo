@@ -16,12 +16,19 @@ export function LoginPage() {
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
+    if (enviando) return
     setEnviando(true)
     setError('')
-    const ok = await login(user, pass)
-    setEnviando(false)
-    if (ok) navigate('/ventas', { replace: true })
-    else setError('Usuario o contraseña incorrectos')
+    try {
+      const ok = await login(user, pass)
+      if (ok) navigate('/ventas', { replace: true })
+      else setError('Usuario o contraseña incorrectos')
+    } catch (err) {
+      console.error('Error al iniciar sesión', err)
+      setError(`No se pudo conectar con el servidor. Revisa la conexión e intenta de nuevo. (${err instanceof Error ? err.message : String(err)})`)
+    } finally {
+      setEnviando(false)
+    }
   }
 
   return (

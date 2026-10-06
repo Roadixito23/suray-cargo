@@ -12,20 +12,25 @@ export async function login(login: string, contrasena: string): Promise<UsuarioS
   const sesion = await api.usuarios.verificarLogin(login.trim(), await sha256(contrasena))
   if (!sesion) return null
   guardar(CLAVE_SESION, { usuarioId: sesion.id })
-  await auditar(sesion, 'login', `Inicio de sesión — ${sesion.nombre} (${sesion.usuario})`)
+  // Sin await: la auditoría es "best effort" y no debe retrasar ni bloquear el ingreso.
+  void auditar(sesion, 'login', `Inicio de sesión — ${sesion.nombre} (${sesion.usuario})`)
   return sesion
 }
 
 export async function logout(usuario: UsuarioSesion | null): Promise<void> {
-  if (usuario) await auditar(usuario, 'logout', 'Cierre de sesión')
   borrar(CLAVE_SESION)
+  if (usuario) void auditar(usuario, 'logout', 'Cierre de sesión')
 }
 
 /** Recupera la sesión guardada (revalidando que el usuario aún exista). */
 export async function restaurarSesion(): Promise<UsuarioSesion | null> {
-  const s = leer<{ usuarioId: string } | null>(CLAVE_SESION, null)
-  if (!s) return null
+  const s = leer<{ usuarioId?: string } | null>(CLAVE_SESION, null)
+  if (!s?.usuarioId) {
+    if (s) borrar(CLAVE_SESION)
+    return null
+  }
   const u = await api.usuarios.obtener(s.usuarioId)
+  if (!u) borrar(CLAVE_SESION)
   return u ? sinContrasena(u) : null
 }
 
