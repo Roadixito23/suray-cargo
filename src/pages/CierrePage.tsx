@@ -36,12 +36,12 @@ export function CierrePage() {
   return (
     <div className="panel">
       <h2>Cierre de caja — {formatoFecha(new Date())}</h2>
-      <p className="sub">{usuario.esAdmin ? 'Todas las ventas del día' : 'Tus ventas del día'}</p>
+      <p className="sub">Cierre individual de {usuario.nombre}: solo tus ventas y cobros del día</p>
       <TarjetasResumen r={resumen} />
       <button className="btn primario grande" onClick={() => setConfirmar(true)}>Realizar cierre de caja</button>
 
       <h3>Ventas del día</h3>
-      <ListaVentasDia ventas={activas} admin={usuario.esAdmin} />
+      <ListaVentasDia ventas={activas} admin={false} />
       {retiros.length > 0 && (
         <>
           <h3>Retiros Por Pagar cobrados hoy</h3>
@@ -51,7 +51,7 @@ export function CierrePage() {
       {anuladas.length > 0 && (
         <>
           <h3>Ventas anuladas</h3>
-          <ListaVentasDia ventas={anuladas} admin={usuario.esAdmin} />
+          <ListaVentasDia ventas={anuladas} admin={false} />
         </>
       )}
 

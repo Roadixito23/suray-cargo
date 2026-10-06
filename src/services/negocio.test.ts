@@ -4,7 +4,7 @@ import { resetLocal } from '../api/localApi'
 import type { NuevaVenta, UsuarioSesion } from '../types'
 import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
 import {
-  anularVenta, listarVentas, porPagarPendientes, registrarRetiro, registrarVenta, resumenCaja, retirosDelDia,
+  anularVenta, listarVentas, porPagarPendientes, registrarRetiro, registrarVenta, resumenCaja, retirosDelDia, ventasDelDia,
 } from './ventas'
 import { login } from './usuarios'
 
@@ -88,6 +88,32 @@ describe('login y respaldo', () => {
     await api.respaldo.importar(r)
     expect(await api.ventas.listar()).toHaveLength(2)
     expect(await api.ventas.peekNumeroBoleta('coyhaique')).toBe('COY-000003')
+  })
+})
+
+describe('cierre de caja individual', () => {
+  const ana: UsuarioSesion = { ...cajero, id: 'u2', nombre: 'Ana', usuario: 'ana' }
+  const venta = (u: UsuarioSesion, o: Partial<NuevaVenta> = {}) =>
+    registrarVenta(u, base({ usuarioId: u.id, usuarioNombre: u.nombre, ...o }))
+
+  it('cada secretaria de la misma sucursal ve solo sus ventas y retiros', async () => {
+    await venta(cajero, { monto: 1000 })
+    await venta(ana, { monto: 2500 })
+    const porPagar = await venta(ana, { metodoPago: 'por_pagar', tipoVenta: 'por_pagar', numeroComprobante: null, monto: 7000 })
+    await registrarRetiro(cajero, porPagar, { comprobante: '1', nombre: 'Juan', rut: '12345678-5', metodoPago: 'efectivo' })
+
+    const deCajero = resumenCaja(await ventasDelDia(cajero), await retirosDelDia(cajero))
+    const deAna = resumenCaja(await ventasDelDia(ana), await retirosDelDia(ana))
+    expect(deCajero.totalGeneral).toBe(1000 + 7000) // su venta + el retiro que él cobró
+    expect(deAna.totalGeneral).toBe(2500) // el Por Pagar de Ana se cobró en caja de otra persona
+  })
+
+  it('un admin tampoco mezcla ventas ajenas en su propio cierre', async () => {
+    await venta(cajero)
+    await venta(admin, { monto: 300 })
+    const mias = await ventasDelDia(admin)
+    expect(mias).toHaveLength(1)
+    expect(mias[0].usuarioId).toBe(admin.id)
   })
 })
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useUsuario } from '../auth/AuthContext'
 import { ListaVentasDia, TarjetasResumen } from '../components/ResumenDia'
 import { DIAS_HISTORICO, claveDia, inicioDelDia, mismoDia } from '../lib/fechas'
-import { listarVentas, resumenCaja } from '../services/ventas'
+import { listarVentas, resumenCaja, retirosDesde } from '../services/ventas'
 import type { Venta } from '../types'
 
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
@@ -17,10 +17,18 @@ export function HistoricoPage() {
   const [mes, setMes] = useState(() => new Date(hoy.getFullYear(), hoy.getMonth(), 1))
   const [dia, setDia] = useState<Date>(hoy)
   const [ventas, setVentas] = useState<Venta[]>([])
+  const [retiros, setRetiros] = useState<Venta[]>([])
 
   useEffect(() => {
     listarVentas(usuario, { desde: limite }).then(setVentas)
+    retirosDesde(usuario, limite).then(setRetiros)
   }, [usuario, limite])
+
+  // Igual que el cierre del día: los retiros Por Pagar cuentan en el día en que se cobraron.
+  const retirosDelDia = useMemo(
+    () => retiros.filter((v) => v.retiroFecha && claveDia(new Date(v.retiroFecha)) === claveDia(dia)),
+    [retiros, dia],
+  )
 
   const porDia = useMemo(() => {
     const m = new Map<string, Venta[]>()
@@ -76,7 +84,7 @@ export function HistoricoPage() {
 
       <div className="panel">
         <h2 className="capitalizar">{diaLargo.format(dia)}</h2>
-        <TarjetasResumen r={resumenCaja(delDia)} />
+        <TarjetasResumen r={resumenCaja(delDia, retirosDelDia)} />
         <ListaVentasDia ventas={delDia} admin={usuario.esAdmin} />
       </div>
     </div>

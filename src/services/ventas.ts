@@ -14,8 +14,14 @@ export function listarVentas(usuario: UsuarioSesion, filtro: FiltroVentas = {}) 
   return api.ventas.listar({ ...filtro, ...alcance(usuario) })
 }
 
-export function ventasDelDia(usuario: UsuarioSesion, dia = new Date()) {
-  return listarVentas(usuario, { desde: inicioDelDia(dia), hasta: finDelDia(dia) })
+/**
+ * Ventas del día de ESTE usuario. El cierre de caja es individual: ni siquiera un admin
+ * mezcla las ventas de otras personas (para eso está el Histórico). El filtro final por
+ * `usuarioId` es un resguardo por si el origen de datos devolviera filas ajenas.
+ */
+export async function ventasDelDia(usuario: UsuarioSesion, dia = new Date()) {
+  const ventas = await api.ventas.listar({ desde: inicioDelDia(dia), hasta: finDelDia(dia), usuarioId: usuario.id })
+  return ventas.filter((v) => v.usuarioId === usuario.id)
 }
 
 export async function registrarVenta(usuario: UsuarioSesion, datos: NuevaVenta): Promise<Venta> {
@@ -61,13 +67,19 @@ export async function porPagarPendientes(usuario: UsuarioSesion): Promise<Venta[
   )
 }
 
-/** Retiros cobrados hoy por este usuario (admin: todos); alimentan el cierre de caja. */
-export function retirosDelDia(usuario: UsuarioSesion, dia = new Date()) {
-  return api.ventas.listar({
+/** Retiros cobrados en el día por este usuario (nunca los de otros, ni siquiera siendo admin); alimentan su cierre. */
+export async function retirosDelDia(usuario: UsuarioSesion, dia = new Date()) {
+  const ventas = await api.ventas.listar({
     retiroDesde: inicioDelDia(dia),
     retiroHasta: finDelDia(dia),
-    ...(usuario.esAdmin ? {} : { retiroUsuarioId: usuario.id }),
+    retiroUsuarioId: usuario.id,
   })
+  return ventas.filter((v) => v.retiroUsuarioId === usuario.id)
+}
+
+/** Retiros cobrados por el usuario desde una fecha (admin: de todos); para el Histórico. */
+export function retirosDesde(usuario: UsuarioSesion, desde: Date) {
+  return api.ventas.listar({ retiroDesde: desde, ...(usuario.esAdmin ? {} : { retiroUsuarioId: usuario.id }) })
 }
 
 export interface DatosNuevoRetiro {
