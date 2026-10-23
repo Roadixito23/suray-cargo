@@ -1,6 +1,16 @@
 // Nombres de campo estables: los respaldos JSON dependen de ellos.
 
-export type Sucursal = 'aysen' | 'coyhaique'
+/** Id de una sucursal del catálogo (ver `SucursalInfo`). Ya no es un conjunto fijo. */
+export type Sucursal = string
+
+export interface SucursalInfo {
+  id: Sucursal
+  nombre: string
+  /** Prefijo del correlativo de boleta (AYS-000001). No cambia una vez creada la sucursal. */
+  prefijo: string
+  /** Una sucursal inactiva deja de ofrecerse como origen/destino, pero conserva su historial. */
+  activa: boolean
+}
 export type MetodoPago = 'efectivo' | 'tarjeta' | 'por_pagar'
 /** Cómo se cobra una carga Por Pagar al retirarla en destino. */
 export type MetodoCobro = 'efectivo' | 'tarjeta'
@@ -18,6 +28,8 @@ export interface Venta {
   metodoPago: MetodoPago
   fecha: string // ISO 8601
   descripcion?: string | null
+  /** Sucursal que emitió la boleta y envía la carga. */
+  sucursalOrigen: Sucursal
   destino: Sucursal
   item: string
   cantidad: string
@@ -40,6 +52,8 @@ export interface Venta {
   retiroMetodoPago?: MetodoCobro | null
   retiroUsuarioId?: string | null
   retiroUsuarioNombre?: string | null
+  /** Sucursal donde se cobró (puede diferir del destino); su caja es la del usuario que cobró. */
+  sucursalRetiro?: Sucursal | null
 }
 
 export interface DatosRetiro {
@@ -49,6 +63,7 @@ export interface DatosRetiro {
   metodoPago: MetodoCobro
   usuarioId: string
   usuarioNombre: string
+  sucursal: Sucursal
 }
 
 /** Datos que entrega la UI; el número de boleta, id y fecha los asigna la API. */
@@ -67,7 +82,12 @@ export type NuevaVenta = Omit<
   | 'retiroMetodoPago'
   | 'retiroUsuarioId'
   | 'retiroUsuarioNombre'
-> & { sucursalBoleta: Sucursal }
+  | 'sucursalRetiro'
+  | 'sucursalOrigen'
+> & {
+  /** Sucursal que emite la boleta: define el prefijo del correlativo y queda como `sucursalOrigen`. */
+  sucursalBoleta: Sucursal
+}
 
 export interface Usuario {
   id: string
@@ -97,6 +117,8 @@ export type AccionAuditoria =
   | 'crear_usuario'
   | 'editar_usuario'
   | 'eliminar_usuario'
+  | 'crear_sucursal'
+  | 'editar_sucursal'
   | 'crear_respaldo'
   | 'restaurar_respaldo'
   | 'migrar_usuarios_locales'
@@ -118,6 +140,8 @@ export interface FiltroVentas {
   usuarioId?: string
   /** Amplía el alcance: además de lo propio, incluye las cargas Por Pagar con este destino. */
   porPagarDestino?: Sucursal
+  /** Amplía el alcance: además de lo propio, incluye toda carga Por Pagar pendiente, sea cual sea su destino. */
+  porPagarCualquierDestino?: boolean
   /** Amplía el alcance: además de lo propio, incluye todo envío que llega a esta sucursal. */
   destinoLlegada?: Sucursal
   retiroUsuarioId?: string
@@ -138,4 +162,6 @@ export interface Respaldo {
   fecha: string
   ventas: Venta[]
   usuarios: Usuario[]
+  /** Ausente en respaldos anteriores a las sucursales dinámicas. */
+  sucursales?: SucursalInfo[]
 }

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { UsuarioSesion } from '../types'
+import { cargarSucursales } from '../services/sucursales'
 import { login as loginSvc, logout as logoutSvc, restaurarSesion } from '../services/usuarios'
 
 interface AuthState {
@@ -16,6 +17,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
+    // Sin catálogo rige el histórico (Aysén/Coyhaique); un fallo de red no debe impedir entrar.
+    cargarSucursales().catch((e) => console.error('No se pudieron cargar las sucursales', e))
     restaurarSesion()
       .then(setUsuario)
       .catch((e) => {

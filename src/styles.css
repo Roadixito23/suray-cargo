@@ -87,6 +87,7 @@ input[type='checkbox'] { width: auto; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-icono { border: 0; background: transparent; cursor: pointer; font-size: 1.1rem; padding: .3rem .5rem; }
 .error { background: var(--error-fondo); color: var(--rojo); padding: .6rem .8rem; border-radius: 8px; margin: .5rem 0; }
+.aviso { background: var(--azul-claro); color: var(--texto); padding: .6rem .8rem; border-radius: 8px; margin: .5rem 0; font-size: .9rem; }
 
 .campo { display: flex; flex-direction: column; gap: .3rem; margin-bottom: .8rem; min-width: 0; }
 .etiqueta { font-size: .85rem; font-weight: 600; color: var(--sub); }

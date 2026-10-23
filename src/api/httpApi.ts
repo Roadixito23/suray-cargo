@@ -1,15 +1,15 @@
 import { supabase } from './supabaseClient'
 import type { Api } from './types'
-import type { FiltroAuditoria, FiltroVentas, RegistroAuditoria, Sucursal, Usuario, Venta } from '../types'
+import type { FiltroAuditoria, FiltroVentas, RegistroAuditoria, Sucursal, SucursalInfo, Usuario, Venta } from '../types'
 
 // Nunca se selecciona la columna "contrasena": el privilegio SELECT sobre ella
 // está revocado para el rol `anon` en la base (ver supabase/schema.sql).
 const COLUMNAS_USUARIO = 'id, nombre, usuario, es_admin, fecha_creacion, sucursal'
 const COLUMNAS_VENTA =
-  'id, numero_boleta, monto, metodo_pago, fecha, descripcion, destino, item, cantidad, tipo_producto,' +
+  'id, numero_boleta, monto, metodo_pago, fecha, descripcion, destino, sucursal_origen, item, cantidad, tipo_producto,' +
   ' tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_comprobante, anulada,' +
   ' motivo_anulacion, fecha_anulacion, usuario_anulacion, tipo_venta, retiro_fecha, retiro_nombre, retiro_rut,' +
-  ' retiro_metodo_pago, retiro_usuario_id, retiro_usuario_nombre'
+  ' retiro_metodo_pago, retiro_usuario_id, retiro_usuario_nombre, sucursal_retiro'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function filaAVenta(f: any): Venta {
@@ -20,6 +20,7 @@ function filaAVenta(f: any): Venta {
     metodoPago: f.metodo_pago,
     fecha: f.fecha,
     descripcion: f.descripcion,
+    sucursalOrigen: f.sucursal_origen,
     destino: f.destino,
     item: f.item,
     cantidad: f.cantidad,
@@ -41,6 +42,7 @@ function filaAVenta(f: any): Venta {
     retiroMetodoPago: f.retiro_metodo_pago,
     retiroUsuarioId: f.retiro_usuario_id,
     retiroUsuarioNombre: f.retiro_usuario_nombre,
+    sucursalRetiro: f.sucursal_retiro,
   }
 }
 
@@ -80,7 +82,11 @@ export const httpApi: Api = {
       if (filtro.hasta) q = q.lte('fecha', filtro.hasta.toISOString())
       if (filtro.usuarioId) {
         const alternativas = [`usuario_id.eq.${filtro.usuarioId}`]
-        if (filtro.porPagarDestino) alternativas.push(`and(tipo_venta.eq.por_pagar,destino.eq.${filtro.porPagarDestino})`)
+        if (filtro.porPagarCualquierDestino) {
+          alternativas.push('and(tipo_venta.eq.por_pagar,anulada.eq.false,retiro_fecha.is.null)')
+        } else if (filtro.porPagarDestino) {
+          alternativas.push(`and(tipo_venta.eq.por_pagar,destino.eq.${filtro.porPagarDestino})`)
+        }
         if (filtro.destinoLlegada) alternativas.push(`destino.eq.${filtro.destinoLlegada}`)
         q = alternativas.length > 1 ? q.or(alternativas.join(',')) : q.eq('usuario_id', filtro.usuarioId)
       }
@@ -133,6 +139,7 @@ export const httpApi: Api = {
           retiro_metodo_pago: datos.metodoPago,
           retiro_usuario_id: datos.usuarioId,
           retiro_usuario_nombre: datos.usuarioNombre,
+          sucursal_retiro: datos.sucursal,
         })
         .eq('id', id)
         .eq('tipo_venta', 'por_pagar')
@@ -149,6 +156,29 @@ export const httpApi: Api = {
       const { data, error } = await supabase.rpc('peek_boleta', { p_sucursal: sucursal })
       if (error) throw new Error(error.message)
       return data as string
+    },
+  },
+
+  sucursales: {
+    async listar() {
+      const { data, error } = await supabase.from('sucursales').select('id, nombre, prefijo, activa').order('nombre')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as SucursalInfo[]
+    },
+
+    async guardar(s) {
+      // El prefijo solo se escribe al crear: las boletas ya emitidas lo llevan impreso.
+      const { data: actualizadas, error } = await supabase
+        .from('sucursales')
+        .update({ nombre: s.nombre, activa: s.activa })
+        .eq('id', s.id)
+        .select('id')
+      if (error) throw new Error(error.message)
+      if (actualizadas.length > 0) return
+      const { error: errorInsert } = await supabase
+        .from('sucursales')
+        .insert({ id: s.id, nombre: s.nombre, prefijo: s.prefijo, activa: s.activa })
+      if (errorInsert) throw new Error(errorInsert.message)
     },
   },
 
@@ -277,6 +307,7 @@ export const httpApi: Api = {
         ventas: (data.ventas ?? []).map(filaAVenta),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         usuarios: (data.usuarios ?? []).map((f: any) => ({ ...filaAUsuario(f), contrasena: f.contrasena })),
+        sucursales: (data.sucursales ?? []) as SucursalInfo[],
       }
     },
 

@@ -4,8 +4,9 @@ import { useUsuario } from '../auth/AuthContext'
 import { useImprimir } from '../components/PrintContext'
 import { Ticket, TicketsVenta, type DatosTicket } from '../components/Ticket'
 import { useToast } from '../components/Toast'
-import { etiquetaMetodo, formatoMonto, nombreSucursal, sucursalOpuesta } from '../lib/format'
+import { etiquetaMetodo, formatoMonto, nombreSucursal } from '../lib/format'
 import { guardar, leer } from '../lib/storage'
+import { useSucursalesActivas } from '../lib/sucursales'
 import { registrarVenta, resumenCaja, retirosDelDia, ventasDelDia } from '../services/ventas'
 import type { MetodoPago, Sucursal, TipoArticulo, Venta } from '../types'
 
@@ -23,11 +24,16 @@ export function VentaPage() {
   const [ahora, setAhora] = useState(() => new Date())
   const [guardando, setGuardando] = useState(false)
 
-  // Los usuarios de sucursal envían siempre hacia la sucursal opuesta; el admin elige.
-  const destinoFijo = !usuario.esAdmin
-  const [destinoElegido, setDestinoElegido] = useState<Sucursal>('coyhaique')
+  // Cada usuario emite desde su sucursal (el admin elige la de la boleta) y elige el destino
+  // entre las demás sucursales activas.
+  const activas = useSucursalesActivas()
+  const [origenElegido, setOrigenElegido] = useState<Sucursal>(usuario.sucursal)
+  const origen = usuario.esAdmin && activas.some((s) => s.id === origenElegido) ? origenElegido : usuario.sucursal
+  const destinos = activas.filter((s) => s.id !== origen)
+  const [destinoElegido, setDestinoElegido] = useState<Sucursal>('')
   const [destinoBloqueado, setDestinoBloqueado] = useState(false)
-  const destino = destinoFijo ? sucursalOpuesta(usuario.sucursal) : destinoElegido
+  // Sin elección válida (o si cambió el origen) se propone la primera opción.
+  const destino = destinos.some((s) => s.id === destinoElegido) ? destinoElegido : (destinos[0]?.id ?? '')
 
   const [autoItem, setAutoItem] = useState(true)
   const [itemManual, setItemManual] = useState('')
@@ -48,17 +54,17 @@ export function VentaPage() {
     const [ventas, cobros, num] = await Promise.all([
       ventasDelDia(usuario),
       retirosDelDia(usuario),
-      api.ventas.peekNumeroBoleta(usuario.sucursal),
+      api.ventas.peekNumeroBoleta(origen),
     ])
     setHoy(ventas)
     setRetiros(cobros)
     setProximo(num)
-  }, [usuario])
+  }, [usuario, origen])
 
   // El correlativo es por sucursal: otros usuarios pueden vender mientras esta pantalla está abierta.
   const refrescarNumero = useCallback(() => {
-    api.ventas.peekNumeroBoleta(usuario.sucursal).then(setProximo, () => {})
-  }, [usuario.sucursal])
+    api.ventas.peekNumeroBoleta(origen).then(setProximo, () => {})
+  }, [origen])
 
   useEffect(() => {
     cargar()
@@ -109,6 +115,7 @@ export function VentaPage() {
   const montoCalculado = multi ? articulos.reduce((s, a) => s + (a.precio || 0), 0) : Number(monto) || 0
 
   const completo =
+    destino !== '' &&
     item !== '' &&
     destinatario.trim() !== '' &&
     remitente.trim() !== '' &&
@@ -120,6 +127,7 @@ export function VentaPage() {
 
   const vistaPrevia: DatosTicket = {
     numeroBoleta: proximo,
+    sucursalOrigen: origen,
     destino,
     fecha: ahora.toISOString(),
     destinatario,
@@ -141,7 +149,7 @@ export function VentaPage() {
     setOpManual('')
     setItemManual('')
     setMetodo('efectivo')
-    if (!destinoFijo && !destinoBloqueado) setDestinoElegido('coyhaique')
+    if (!destinoBloqueado) setDestinoElegido('')
   }
 
   async function enviar(e: FormEvent) {
@@ -150,7 +158,7 @@ export function VentaPage() {
     setGuardando(true)
     try {
       const venta = await registrarVenta(usuario, {
-        sucursalBoleta: usuario.sucursal,
+        sucursalBoleta: origen,
         monto: montoCalculado,
         metodoPago: metodo,
         descripcion: null,
@@ -202,29 +210,40 @@ export function VentaPage() {
           <span>Total hoy: <strong>{formatoMonto(resumen.totalGeneral)}</strong></span>
         </div>
 
+        {usuario.esAdmin && (
+          <div className="campo">
+            <span className="etiqueta">Sucursal de origen (boleta)</span>
+            <div className="segmentado">
+              {activas.map((s) => (
+                <button key={s.id} type="button" className={origen === s.id ? 'sel' : ''} onClick={() => setOrigenElegido(s.id)}>
+                  {s.nombre}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="campo">
           <span className="etiqueta">Destino</span>
           <div className="segmentado">
-            {(['coyhaique', 'aysen'] as const).map((s) => (
+            {destinos.map((s) => (
               <button
-                key={s}
+                key={s.id}
                 type="button"
-                className={destino === s ? 'sel' : ''}
-                disabled={destinoFijo || destinoBloqueado}
-                onClick={() => setDestinoElegido(s)}
+                className={destino === s.id ? 'sel' : ''}
+                disabled={destinoBloqueado}
+                onClick={() => setDestinoElegido(s.id)}
               >
-                {nombreSucursal(s)}
+                {s.nombre}
               </button>
             ))}
           </div>
-          {destinoFijo ? (
-            <small>Fijado por tu sucursal ({nombreSucursal(usuario.sucursal)} → {nombreSucursal(destino)}).</small>
-          ) : (
-            <label className="check">
-              <input type="checkbox" checked={destinoBloqueado} onChange={(e) => setDestinoBloqueado(e.target.checked)} />
-              Mantener destino entre ventas
-            </label>
-          )}
+          {destinos.length === 0 && <small className="rojo-texto">No hay otra sucursal activa a la que enviar.</small>}
+          <small>Origen: {nombreSucursal(origen)}.</small>
+          <label className="check">
+            <input type="checkbox" checked={destinoBloqueado} onChange={(e) => setDestinoBloqueado(e.target.checked)} />
+            Mantener destino entre ventas
+          </label>
         </div>
 
         <div className="fila">

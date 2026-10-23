@@ -15,6 +15,8 @@ const ACCIONES: Record<string, string> = {
   crear_respaldo: 'Respaldo creado',
   restaurar_respaldo: 'Respaldo restaurado',
   migrar_usuarios_locales: 'Usuarios locales migrados',
+  crear_sucursal: 'Sucursal creada',
+  editar_sucursal: 'Sucursal editada',
 }
 
 export function AuditoriaPage() {

@@ -6,6 +6,8 @@ interface Props {
   fecha: Date
   resumen: ResumenCaja
   usuarioNombre: string
+  /** Sucursal en la que opera el usuario (aparece en el reporte para conciliar entre cajas). */
+  sucursalNombre: string
 }
 
 const Fila = ({ a, b, fuerte }: { a: string; b: string; fuerte?: boolean }) => (
@@ -16,7 +18,7 @@ const Fila = ({ a, b, fuerte }: { a: string; b: string; fuerte?: boolean }) => (
 )
 
 /** Reporte de cierre de caja en formato ticket de 80 mm. */
-export function ReporteCierre({ fecha, resumen: r, usuarioNombre }: Props) {
+export function ReporteCierre({ fecha, resumen: r, usuarioNombre, sucursalNombre }: Props) {
   const hora = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false })
   return (
     <section className="ticket ticket-cierre">
@@ -28,6 +30,7 @@ export function ReporteCierre({ fecha, resumen: r, usuarioNombre }: Props) {
         <Fila a="Fecha:" b={formatoFecha(fecha)} />
         <Fila a="Hora:" b={hora} />
         <Fila a="Usuario:" b={usuarioNombre} />
+        <Fila a="Sucursal:" b={sucursalNombre} />
         <hr />
         <div className="fuerte">EFECTIVO</div>
         <Fila a="Cantidad de ventas:" b={String(r.cantidadEfectivo)} />
@@ -38,6 +41,14 @@ export function ReporteCierre({ fecha, resumen: r, usuarioNombre }: Props) {
         <Fila a="Total:" b={formatoMonto(r.totalTarjeta)} />
         <hr />
         <Fila a="TOTAL GENERAL:" b={formatoMonto(r.totalGeneral)} fuerte />
+        {r.cantidadCobrosOtroDestino > 0 && (
+          <>
+            <hr />
+            <div className="fuerte">COBROS DE OTRO DESTINO</div>
+            <Fila a="Cantidad:" b={String(r.cantidadCobrosOtroDestino)} />
+            <Fila a="Total (incluido arriba):" b={formatoMonto(r.totalCobrosOtroDestino)} />
+          </>
+        )}
       </div>
     </section>
   )

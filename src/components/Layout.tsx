@@ -21,6 +21,7 @@ const RUTAS = [
 const RUTAS_ADMIN = [
   { to: '/admin/auditoria', texto: 'Auditoría' },
   { to: '/admin/usuarios', texto: 'Usuarios' },
+  { to: '/admin/sucursales', texto: 'Sucursales' },
   { to: '/admin/respaldos', texto: 'Respaldos' },
 ]
 

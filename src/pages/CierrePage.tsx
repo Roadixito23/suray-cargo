@@ -5,7 +5,7 @@ import { useImprimir } from '../components/PrintContext'
 import { ReporteCierre } from '../components/ReporteCierre'
 import { ListaRetiros, ListaVentasDia, TarjetasResumen } from '../components/ResumenDia'
 import { useToast } from '../components/Toast'
-import { formatoFecha } from '../lib/format'
+import { formatoFecha, nombreSucursal } from '../lib/format'
 import { resumenCaja, retirosDelDia, ventasDelDia } from '../services/ventas'
 import type { Venta } from '../types'
 
@@ -29,7 +29,7 @@ export function CierrePage() {
 
   function cerrar() {
     setConfirmar(false)
-    imprimir(<ReporteCierre fecha={new Date()} resumen={resumen} usuarioNombre={usuario.nombre} />)
+    imprimir(<ReporteCierre fecha={new Date()} resumen={resumen} usuarioNombre={usuario.nombre} sucursalNombre={nombreSucursal(usuario.sucursal)} />)
     toast('Cierre de caja realizado. Reporte generado.')
   }
 

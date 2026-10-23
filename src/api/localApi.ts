@@ -1,12 +1,13 @@
 import { sha256 } from '../lib/hash'
 import { borrar, guardar, leer } from '../lib/storage'
-import { prefijoBoleta } from '../lib/format'
+import { SUCURSALES_INICIALES } from '../lib/sucursales'
 import type { Api } from './types'
 import type {
   FiltroAuditoria,
   FiltroVentas,
   RegistroAuditoria,
   Sucursal,
+  SucursalInfo,
   Usuario,
   Venta,
 } from '../types'
@@ -16,12 +17,16 @@ const K = {
   usuarios: 'usuarios',
   auditoria: 'auditoria',
   contadores: 'contadores',
+  sucursales: 'sucursales',
 }
 
 type Contadores = Record<Sucursal, number>
 
-const leerContadores = () => leer<Contadores>(K.contadores, { aysen: 0, coyhaique: 0 })
-const formatoBoleta = (s: Sucursal, n: number) => `${prefijoBoleta(s)}-${String(n).padStart(6, '0')}`
+const leerContadores = () => leer<Contadores>(K.contadores, {})
+// Copia: sin almacenamiento `leer` devuelve el arreglo por defecto y quien lo modifique lo contaminaría.
+const leerSucursales = () => leer<SucursalInfo[]>(K.sucursales, SUCURSALES_INICIALES).map((s) => ({ ...s }))
+const prefijoDe = (id: Sucursal) => leerSucursales().find((s) => s.id === id)?.prefijo ?? id.slice(0, 3).toUpperCase()
+const formatoBoleta = (s: Sucursal, n: number) => `${prefijoDe(s)}-${String(n).padStart(6, '0')}`
 
 let idSeq = 0
 const nuevoId = () => `${Date.now()}${String(idSeq++ % 1000).padStart(3, '0')}`
@@ -48,7 +53,7 @@ let listo = asegurarAdmin()
 export const localApi: Api = {
   ventas: {
     async listar(filtro: FiltroVentas = {}) {
-      const { desde, hasta, usuarioId, porPagarDestino, destinoLlegada, retiroUsuarioId, retiroDesde, retiroHasta } = filtro
+      const { desde, hasta, usuarioId, porPagarDestino, porPagarCualquierDestino, destinoLlegada, retiroUsuarioId, retiroDesde, retiroHasta } = filtro
       return leer<Venta[]>(K.ventas, [])
         .filter((v) => {
           const t = new Date(v.fecha).getTime()
@@ -56,6 +61,7 @@ export const localApi: Api = {
           if (hasta && t > hasta.getTime()) return false
           if (usuarioId && v.usuarioId !== usuarioId) {
             const ajenaVisible =
+              (porPagarCualquierDestino && v.tipoVenta === 'por_pagar' && !v.anulada && !v.retiroFecha) ||
               (porPagarDestino && v.tipoVenta === 'por_pagar' && v.destino === porPagarDestino) ||
               (destinoLlegada && v.destino === destinoLlegada)
             if (!ajenaVisible) return false
@@ -78,11 +84,15 @@ export const localApi: Api = {
 
     async crear(nueva) {
       const { sucursalBoleta, ...datos } = nueva
+      const activas = leerSucursales().filter((s) => s.activa).map((s) => s.id)
+      if (!activas.includes(sucursalBoleta)) throw new Error('sucursalBoleta inválida o inactiva')
+      if (!activas.includes(datos.destino)) throw new Error('destino inválido o inactivo')
       // Lectura + incremento + escritura son síncronos: atómico dentro del navegador.
       const contadores = leerContadores()
-      contadores[sucursalBoleta] += 1
+      contadores[sucursalBoleta] = (contadores[sucursalBoleta] ?? 0) + 1
       const venta: Venta = {
         ...datos,
+        sucursalOrigen: sucursalBoleta,
         id: nuevoId(),
         numeroBoleta: formatoBoleta(sucursalBoleta, contadores[sucursalBoleta]),
         fecha: new Date().toISOString(),
@@ -96,6 +106,7 @@ export const localApi: Api = {
         retiroMetodoPago: null,
         retiroUsuarioId: null,
         retiroUsuarioNombre: null,
+        sucursalRetiro: null,
       }
       const ventas = leer<Venta[]>(K.ventas, [])
       ventas.push(venta)
@@ -131,12 +142,26 @@ export const localApi: Api = {
       v.retiroMetodoPago = datos.metodoPago
       v.retiroUsuarioId = datos.usuarioId
       v.retiroUsuarioNombre = datos.usuarioNombre
+      v.sucursalRetiro = datos.sucursal
       guardar(K.ventas, ventas)
       return v
     },
 
     async peekNumeroBoleta(sucursal) {
-      return formatoBoleta(sucursal, leerContadores()[sucursal] + 1)
+      return formatoBoleta(sucursal, (leerContadores()[sucursal] ?? 0) + 1)
+    },
+  },
+
+  sucursales: {
+    async listar() {
+      return leerSucursales()
+    },
+    async guardar(s) {
+      const lista = leerSucursales()
+      const i = lista.findIndex((x) => x.id === s.id)
+      if (i >= 0) lista[i] = { ...lista[i], nombre: s.nombre, activa: s.activa }
+      else lista.push(s)
+      guardar(K.sucursales, lista)
     },
   },
 
@@ -217,14 +242,32 @@ export const localApi: Api = {
         fecha: new Date().toISOString(),
         ventas: leer<Venta[]>(K.ventas, []),
         usuarios: leer<Usuario[]>(K.usuarios, []),
+        sucursales: leerSucursales(),
       }
     },
     async importar(r) {
       if (!Array.isArray(r?.ventas) || !Array.isArray(r?.usuarios)) {
         throw new Error('Archivo de respaldo inválido')
       }
+      // Primero las sucursales: ventas y usuarios dependen de ellas.
+      const sucursales = leerSucursales()
+      for (const s of r.sucursales ?? []) {
+        const i = sucursales.findIndex((x) => x.id === s.id)
+        if (i >= 0) sucursales[i] = { ...sucursales[i], nombre: s.nombre, activa: s.activa }
+        else sucursales.push(s)
+      }
+      guardar(K.sucursales, sucursales)
+
+      // Respaldos anteriores no traen `sucursalOrigen`: se deduce del prefijo de la boleta.
+      const origenDe = (numero: string) => sucursales.find((s) => s.prefijo === numero.split('-')[0])?.id
       const porId = new Map(leer<Venta[]>(K.ventas, []).map((v) => [v.id, v]))
-      for (const v of r.ventas) porId.set(v.id, v)
+      for (const v of r.ventas) {
+        porId.set(v.id, {
+          ...v,
+          sucursalOrigen: v.sucursalOrigen ?? origenDe(v.numeroBoleta) ?? v.destino,
+          sucursalRetiro: v.retiroFecha ? (v.sucursalRetiro ?? v.destino) : null,
+        })
+      }
       guardar(K.ventas, [...porId.values()])
 
       const usuarios = leer<Usuario[]>(K.usuarios, [])
@@ -242,8 +285,8 @@ export const localApi: Api = {
       const contadores = leerContadores()
       for (const v of porId.values()) {
         const [pref, num] = v.numeroBoleta.split('-')
-        const s: Sucursal | null = pref === 'AYS' ? 'aysen' : pref === 'COY' ? 'coyhaique' : null
-        if (s) contadores[s] = Math.max(contadores[s], Number(num) || 0)
+        const s = sucursales.find((x) => x.prefijo === pref)?.id
+        if (s) contadores[s] = Math.max(contadores[s] ?? 0, Number(num) || 0)
       }
       guardar(K.contadores, contadores)
       return { ventas: r.ventas.length, usuarios: importados }

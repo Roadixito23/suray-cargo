@@ -4,13 +4,18 @@ import { Modal } from '../components/Modal'
 import { useToast } from '../components/Toast'
 import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
 import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
+import { useSucursales } from '../lib/sucursales'
 import { porPagarPendientes, registrarRetiro } from '../services/ventas'
-import type { MetodoCobro, Venta } from '../types'
+import type { MetodoCobro, Sucursal, Venta } from '../types'
 
 /** Registro del retiro de cargas Por Pagar en la sucursal destino (cobro + datos de quien retira). */
 export function RetiroPorPagarPage() {
   const usuario = useUsuario()
   const toast = useToast()
+  const sucursales = useSucursales()
+  // Admin: filtra por sucursal de destino ('' = todas). Resto: puede incluir cargas de otros destinos.
+  const [sucursalFiltro, setSucursalFiltro] = useState<'' | Sucursal>('')
+  const [todas, setTodas] = useState(false)
   const [pendientes, setPendientes] = useState<Venta[]>([])
   const [cargando, setCargando] = useState(true)
   const [texto, setTexto] = useState('')
@@ -23,11 +28,11 @@ export function RetiroPorPagarPage() {
 
   const recargar = useCallback(() => {
     setCargando(true)
-    porPagarPendientes(usuario)
+    porPagarPendientes(usuario, { sucursal: sucursalFiltro || undefined, todas })
       .then(setPendientes)
       .catch((e) => toast((e as Error).message, 'error'))
       .finally(() => setCargando(false))
-  }, [usuario, toast])
+  }, [usuario, toast, sucursalFiltro, todas])
 
   useEffect(recargar, [recargar])
 
@@ -57,7 +62,7 @@ export function RetiroPorPagarPage() {
     if (!objetivo || !completo || enviando) return
     setEnviando(true)
     try {
-      await registrarRetiro(usuario, objetivo, { comprobante, nombre, rut, metodoPago: cobro })
+      await registrarRetiro(usuario, objetivo, { comprobante, nombre, rut, metodoPago: cobro, sucursal: sucursalFiltro || undefined })
       toast(`Retiro de la boleta ${objetivo.numeroBoleta} registrado: ${formatoMonto(objetivo.monto)} (${etiquetaMetodo(cobro)})`)
       cerrar()
       recargar()
@@ -71,7 +76,12 @@ export function RetiroPorPagarPage() {
   return (
     <>
       <div className="panel">
-        <p className="sub">Cargas Por Pagar pendientes de retiro{usuario.esAdmin ? '' : ` en ${nombreSucursal(usuario.sucursal)}`}.</p>
+        <p className="sub">
+          Cargas Por Pagar pendientes de retiro
+          {usuario.esAdmin
+            ? sucursalFiltro ? ` con destino ${nombreSucursal(sucursalFiltro)}` : ' de todas las sucursales'
+            : todas ? ' en todas las sucursales' : ` en ${nombreSucursal(usuario.sucursal)}`}.
+        </p>
         <div className="filtros">
           <input
             type="search"
@@ -80,12 +90,25 @@ export function RetiroPorPagarPage() {
             onChange={(e) => setTexto(e.target.value)}
             aria-label="Buscar"
           />
+          {usuario.esAdmin ? (
+            <select value={sucursalFiltro} onChange={(e) => setSucursalFiltro(e.target.value)} aria-label="Sucursal de destino">
+              <option value="">Todas las sucursales</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>Destino: {s.nombre}</option>
+              ))}
+            </select>
+          ) : (
+            <label className="check">
+              <input type="checkbox" checked={todas} onChange={(e) => setTodas(e.target.checked)} />
+              Incluir cargas de otros destinos
+            </label>
+          )}
         </div>
         <div className="tabla-scroll">
           <table>
             <thead>
               <tr>
-                <th>Boleta</th><th>Fecha</th><th>Origen</th><th>Destinatario</th><th>Remitente</th>
+                <th>Boleta</th><th>Fecha</th><th>Origen</th><th>Destino</th><th>Destinatario</th><th>Remitente</th>
                 <th className="der">Monto</th><th />
               </tr>
             </thead>
@@ -94,7 +117,8 @@ export function RetiroPorPagarPage() {
                 <tr key={v.id}>
                   <td>{v.numeroBoleta}</td>
                   <td>{formatoFechaHora(v.fecha)}</td>
-                  <td>{nombreSucursal(v.destino === 'aysen' ? 'coyhaique' : 'aysen')}</td>
+                  <td>{nombreSucursal(v.sucursalOrigen)}</td>
+                  <td>{nombreSucursal(v.destino)}</td>
                   <td>{v.destinatario}</td>
                   <td>{v.remitente}</td>
                   <td className="der">{formatoMonto(v.monto)}</td>
@@ -127,6 +151,12 @@ export function RetiroPorPagarPage() {
             Boleta <strong>{objetivo.numeroBoleta}</strong> — {objetivo.destinatario} (de {objetivo.remitente}) —{' '}
             <strong>{formatoMonto(objetivo.monto)}</strong>
           </p>
+          {!usuario.esAdmin && objetivo.destino !== usuario.sucursal && (
+            <div className="aviso">
+              Esta carga está destinada a <strong>{nombreSucursal(objetivo.destino)}</strong>. Si la cobras aquí, el dinero
+              entra en tu caja ({nombreSucursal(usuario.sucursal)}) y queda registrado como cobro de otro destino.
+            </div>
+          )}
           <div className="campo">
             <span className="etiqueta">Cobro</span>
             <div className="segmentado">

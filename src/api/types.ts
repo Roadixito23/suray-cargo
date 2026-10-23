@@ -7,6 +7,7 @@ import type {
   RegistroAuditoria,
   Respaldo,
   Sucursal,
+  SucursalInfo,
   Usuario,
   UsuarioSesion,
   Venta,
@@ -34,6 +35,11 @@ export interface Api {
     /** Registra el retiro de una carga Por Pagar (una sola vez): comprobante, retirante, cobro y fecha de hoy. */
     registrarRetiro(id: string, datos: DatosRetiro): Promise<Venta>
     peekNumeroBoleta(sucursal: Sucursal): Promise<string>
+  }
+  sucursales: {
+    listar(): Promise<SucursalInfo[]>
+    /** Crea la sucursal o, si el id ya existe, actualiza nombre y estado (el prefijo no cambia). */
+    guardar(s: SucursalInfo): Promise<void>
   }
   usuarios: {
     listar(): Promise<Usuario[]>

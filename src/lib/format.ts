@@ -1,5 +1,3 @@
-import type { Sucursal } from '../types'
-
 const moneda = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
 export const formatoMonto = (n: number) => `$${moneda.format(n)}`
 
@@ -16,9 +14,7 @@ export const formatoFechaHora = (iso: string | Date) => fechaHora.format(new Dat
 const fecha = new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
 export const formatoFecha = (iso: string | Date) => fecha.format(new Date(iso))
 
-export const nombreSucursal = (s: Sucursal) => (s === 'aysen' ? 'Aysén' : 'Coyhaique')
-export const prefijoBoleta = (s: Sucursal) => (s === 'aysen' ? 'AYS' : 'COY')
-export const sucursalOpuesta = (s: Sucursal): Sucursal => (s === 'aysen' ? 'coyhaique' : 'aysen')
+export { nombreSucursal, prefijoBoleta } from './sucursales'
 
 export const etiquetaMetodo = (m: string) =>
   m === 'efectivo' ? 'Efectivo' : m === 'por_pagar' ? 'Por Pagar' : 'Tarjeta'

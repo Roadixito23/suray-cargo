@@ -10,6 +10,7 @@ import { LoginPage } from './pages/LoginPage'
 import { ReimprimirPage } from './pages/ReimprimirPage'
 import { RetiroPorPagarPage } from './pages/RetiroPorPagarPage'
 import { RespaldosPage } from './pages/RespaldosPage'
+import { SucursalesPage } from './pages/SucursalesPage'
 import { UsuariosPage } from './pages/UsuariosPage'
 import { VentaPage } from './pages/VentaPage'
 
@@ -41,6 +42,7 @@ export function App() {
         <Route path="/historico" element={<HistoricoPage />} />
         <Route path="/admin/auditoria" element={<Protegida admin><AuditoriaPage /></Protegida>} />
         <Route path="/admin/usuarios" element={<Protegida admin><UsuariosPage /></Protegida>} />
+        <Route path="/admin/sucursales" element={<Protegida admin><SucursalesPage /></Protegida>} />
         <Route path="/admin/respaldos" element={<Protegida admin><RespaldosPage /></Protegida>} />
       </Route>
       <Route path="*" element={<Navigate to="/ventas" replace />} />

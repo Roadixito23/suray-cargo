@@ -52,6 +52,7 @@ export function DetalleVenta({ v }: { v: Venta }) {
       <div className="fila">
         {campo('Destinatario', v.destinatario)}
         {campo('Remitente', v.remitente)}
+        {campo('Origen', nombreSucursal(v.sucursalOrigen))}
         {campo('Destino', nombreSucursal(v.destino))}
         {campo('Ítem / Cantidad', `${v.item} / ${v.cantidad}`)}
       </div>
@@ -77,6 +78,7 @@ export function DetalleVenta({ v }: { v: Venta }) {
             {campo('Fecha de retiro', formatoFechaHora(v.retiroFecha))}
             {campo('Cobro', v.retiroMetodoPago ? etiquetaMetodo(v.retiroMetodoPago) : null)}
             {campo('Registrado por', v.retiroUsuarioNombre)}
+            {campo('Cobrado en', v.sucursalRetiro ? nombreSucursal(v.sucursalRetiro) : null)}
           </div>
         </>
       )}

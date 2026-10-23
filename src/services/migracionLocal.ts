@@ -1,6 +1,7 @@
 import { api } from '../api'
 import { leer } from '../lib/storage'
-import type { Sucursal, Usuario, UsuarioSesion } from '../types'
+import { obtenerSucursales } from '../lib/sucursales'
+import type { Usuario, UsuarioSesion } from '../types'
 import { auditar } from './auditoria'
 
 /**
@@ -15,7 +16,6 @@ import { auditar } from './auditoria'
 
 const CLAVE_LOCAL = 'usuarios'
 export const CLAVE_OMITIR = 'migracion_omitida'
-const SUCURSALES: Sucursal[] = ['aysen', 'coyhaique']
 
 export type Decision = 'agregar' | 'existe' | 'invalido'
 
@@ -59,7 +59,7 @@ export function planificarMigracion(locales: Usuario[], remotos: Pick<Usuario, '
       ? 'sin nombre'
       : !local.contrasena
         ? 'sin contraseña guardada'
-        : !SUCURSALES.includes(local.sucursal)
+        : !obtenerSucursales().some((s) => s.id === local.sucursal)
           ? 'sucursal inválida'
           : undefined
     items.push({ local, decision: motivo ? 'invalido' : 'agregar', diferencias: [], motivo })

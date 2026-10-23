@@ -4,14 +4,16 @@ import { useUsuario } from '../auth/AuthContext'
 import { Modal } from '../components/Modal'
 import { useToast } from '../components/Toast'
 import { formatoFecha, nombreSucursal } from '../lib/format'
+import { useSucursales } from '../lib/sucursales'
 import { eliminarUsuario, guardarUsuario, type DatosUsuario } from '../services/usuarios'
 import type { Usuario } from '../types'
 
-const VACIO: DatosUsuario = { nombre: '', usuario: '', contrasena: '', esAdmin: false, sucursal: 'coyhaique' }
+const vacio = (sucursal: string): DatosUsuario => ({ nombre: '', usuario: '', contrasena: '', esAdmin: false, sucursal })
 
 export function UsuariosPage() {
   const actor = useUsuario()
   const toast = useToast()
+  const sucursales = useSucursales()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [form, setForm] = useState<DatosUsuario | null>(null)
   const [borrar, setBorrar] = useState<Usuario | null>(null)
@@ -50,7 +52,7 @@ export function UsuariosPage() {
   return (
     <div className="panel">
       <div className="filtros">
-        <button className="btn primario" onClick={() => setForm(VACIO)}>+ Nuevo usuario</button>
+        <button className="btn primario" onClick={() => setForm(vacio(sucursales.find((s) => s.activa)?.id ?? ''))}>+ Nuevo usuario</button>
       </div>
       <div className="tabla-scroll">
         <table>
@@ -92,9 +94,12 @@ export function UsuariosPage() {
           </label>
           <label className="campo">
             <span className="etiqueta">Sucursal</span>
-            <select value={form.sucursal} onChange={(e) => set({ sucursal: e.target.value as DatosUsuario['sucursal'] })}>
-              <option value="aysen">Aysén</option>
-              <option value="coyhaique">Coyhaique</option>
+            <select value={form.sucursal} onChange={(e) => set({ sucursal: e.target.value })}>
+              {sucursales
+                .filter((s) => s.activa || s.id === form.sucursal)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>{s.nombre}{s.activa ? '' : ' (inactiva)'}</option>
+                ))}
             </select>
           </label>
           <label className="check"><input type="checkbox" checked={form.esAdmin} onChange={(e) => set({ esAdmin: e.target.checked })} /> Administrador</label>

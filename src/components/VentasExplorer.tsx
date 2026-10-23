@@ -4,6 +4,7 @@ import { aInputDate, desdeInputDate, finDelDia } from '../lib/fechas'
 import { api } from '../api'
 import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
 import { normalizarRut } from '../lib/rut'
+import { useSucursales } from '../lib/sucursales'
 import { listarVentas } from '../services/ventas'
 import type { Sucursal, Venta } from '../types'
 
@@ -22,6 +23,7 @@ interface Props {
  */
 export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props) {
   const usuario = useUsuario()
+  const sucursales = useSucursales()
   const hoy = aInputDate(new Date())
   const [desde, setDesde] = useState(hoy)
   const [hasta, setHasta] = useState(hoy)
@@ -91,8 +93,9 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
         <label>Hasta <input type="date" value={hasta} min={desde} onChange={(e) => setHasta(e.target.value)} /></label>
         <select value={destino} onChange={(e) => setDestino(e.target.value as '' | Sucursal)} aria-label="Destino">
           <option value="">Todos los destinos</option>
-          <option value="aysen">Aysén</option>
-          <option value="coyhaique">Coyhaique</option>
+          {sucursales.map((s) => (
+            <option key={s.id} value={s.id}>{s.nombre}</option>
+          ))}
         </select>
         <select value={metodo} onChange={(e) => setMetodo(e.target.value)} aria-label="Método de pago">
           <option value="">Todo método</option>
@@ -106,7 +109,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
         <table>
           <thead>
             <tr>
-              <th>Boleta</th><th>Fecha</th><th>Destino</th><th>Destinatario</th><th>Remitente</th>
+              <th>Boleta</th><th>Fecha</th><th>Origen</th><th>Destino</th><th>Destinatario</th><th>Remitente</th>
               <th className="der">Monto</th><th>Pago</th>{usuario.esAdmin && <th>Vendedor</th>}<th />
             </tr>
           </thead>
@@ -115,6 +118,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
               <tr key={v.id} className={v.anulada ? 'anulada' : ''}>
                 <td>{v.numeroBoleta}{v.anulada && <span className="badge rojo">Anulada</span>}</td>
                 <td>{formatoFechaHora(v.fecha)}</td>
+                <td>{nombreSucursal(v.sucursalOrigen)}</td>
                 <td>{nombreSucursal(v.destino)}</td>
                 <td>{v.destinatario}</td>
                 <td>{v.remitente}</td>

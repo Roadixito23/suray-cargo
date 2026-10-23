@@ -2,7 +2,7 @@ import { api } from '../api'
 import { finDelDia, inicioDelDia } from '../lib/fechas'
 import { etiquetaMetodo, formatoMonto, nombreSucursal } from '../lib/format'
 import { formatearRut, validarRut } from '../lib/rut'
-import type { FiltroVentas, MetodoCobro, NuevaVenta, UsuarioSesion, Venta } from '../types'
+import type { FiltroVentas, MetodoCobro, NuevaVenta, Sucursal, UsuarioSesion, Venta } from '../types'
 import { auditar } from './auditoria'
 
 /** Admin ve todo; el resto solo sus propias ventas. */
@@ -29,7 +29,7 @@ export async function registrarVenta(usuario: UsuarioSesion, datos: NuevaVenta):
   await auditar(
     usuario,
     'crear_venta',
-    `Boleta ${venta.numeroBoleta} — ${nombreSucursal(venta.destino)} — ${formatoMonto(venta.monto)} (${etiquetaMetodo(venta.metodoPago)})`,
+    `Boleta ${venta.numeroBoleta} — ${nombreSucursal(venta.sucursalOrigen)} → ${nombreSucursal(venta.destino)} — ${formatoMonto(venta.monto)} (${etiquetaMetodo(venta.metodoPago)})`,
     venta.id,
     'ventas',
   )
@@ -55,15 +55,27 @@ export async function anularVenta(usuario: UsuarioSesion, venta: Venta, motivo: 
 
 // ── Por Pagar: retiro en la sucursal destino ────────────────────────────────────
 
-/** Cargas Por Pagar que esperan retiro: las que llegan a la sucursal del usuario (admin: todas). */
-export async function porPagarPendientes(usuario: UsuarioSesion): Promise<Venta[]> {
-  const ventas = await api.ventas.listar(usuario.esAdmin ? {} : { usuarioId: usuario.id, porPagarDestino: usuario.sucursal })
+export interface OpcionesPendientes {
+  /** Solo admin: limita la lista a las cargas destinadas a esta sucursal (sin valor = todas). */
+  sucursal?: Sucursal
+  /** Solo no admin: incluye también las cargas destinadas a otras sucursales (cobro fuera del destino). */
+  todas?: boolean
+}
+
+/**
+ * Cargas Por Pagar que esperan retiro. Por defecto, las destinadas a la sucursal del usuario; el admin ve
+ * todas y puede filtrar por sucursal. Cobrar una carga de otro destino entra igual en la caja de quien cobra.
+ */
+export async function porPagarPendientes(usuario: UsuarioSesion, opciones: OpcionesPendientes = {}): Promise<Venta[]> {
+  const cualquierDestino = usuario.esAdmin || !!opciones.todas
+  const ventas = await api.ventas.listar(
+    usuario.esAdmin
+      ? {}
+      : { usuarioId: usuario.id, ...(opciones.todas ? { porPagarCualquierDestino: true } : { porPagarDestino: usuario.sucursal }) },
+  )
+  const destino = usuario.esAdmin ? opciones.sucursal : cualquierDestino ? undefined : usuario.sucursal
   return ventas.filter(
-    (v) =>
-      v.tipoVenta === 'por_pagar' &&
-      !v.anulada &&
-      !v.retiroFecha &&
-      (usuario.esAdmin || v.destino === usuario.sucursal),
+    (v) => v.tipoVenta === 'por_pagar' && !v.anulada && !v.retiroFecha && (!destino || v.destino === destino),
   )
 }
 
@@ -87,6 +99,8 @@ export interface DatosNuevoRetiro {
   nombre: string
   rut: string
   metodoPago: MetodoCobro
+  /** Solo admin: sucursal donde cobra. Los demás cobran siempre en la suya; sin valor, el destino de la carga. */
+  sucursal?: Sucursal
 }
 
 export async function registrarRetiro(usuario: UsuarioSesion, venta: Venta, datos: DatosNuevoRetiro): Promise<Venta> {
@@ -105,6 +119,7 @@ export async function registrarRetiro(usuario: UsuarioSesion, venta: Venta, dato
     metodoPago: datos.metodoPago,
     usuarioId: usuario.id,
     usuarioNombre: usuario.nombre,
+    sucursal: usuario.esAdmin ? (datos.sucursal ?? venta.destino) : usuario.sucursal,
   })
   await auditar(
     usuario,
@@ -126,6 +141,9 @@ export interface ResumenCaja {
   cantidadTarjeta: number
   totalAnulaciones: number
   cantidadAnulaciones: number
+  /** Cobros Por Pagar incluidos arriba cuyo destino no es la sucursal donde se cobraron (para conciliar). */
+  cantidadCobrosOtroDestino: number
+  totalCobrosOtroDestino: number
 }
 
 /**
@@ -139,6 +157,7 @@ export function resumenCaja(ventas: Venta[], retiros: Venta[] = []): ResumenCaja
   const efectivo = [...activas.filter((v) => v.metodoPago === 'efectivo'), ...cobrados.filter((v) => v.retiroMetodoPago === 'efectivo')]
   const tarjeta = [...activas.filter((v) => v.metodoPago === 'tarjeta'), ...cobrados.filter((v) => v.retiroMetodoPago === 'tarjeta')]
   const suma = (l: Venta[]) => l.reduce((s, v) => s + v.monto, 0)
+  const otroDestino = cobrados.filter((v) => v.sucursalRetiro && v.sucursalRetiro !== v.destino)
   return {
     totalEfectivo: suma(efectivo),
     totalTarjeta: suma(tarjeta),
@@ -147,5 +166,7 @@ export function resumenCaja(ventas: Venta[], retiros: Venta[] = []): ResumenCaja
     cantidadTarjeta: tarjeta.length,
     totalAnulaciones: suma(anuladas),
     cantidadAnulaciones: anuladas.length,
+    cantidadCobrosOtroDestino: otroDestino.length,
+    totalCobrosOtroDestino: suma(otroDestino),
   }
 }

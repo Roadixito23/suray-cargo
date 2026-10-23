@@ -6,6 +6,7 @@ import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
 import {
   anularVenta, listarVentas, porPagarPendientes, registrarRetiro, registrarVenta, resumenCaja, retirosDelDia, ventasDelDia,
 } from './ventas'
+import { guardarSucursal } from './sucursales'
 import { login } from './usuarios'
 
 const cajero: UsuarioSesion = {
@@ -136,7 +137,7 @@ describe('Por Pagar', () => {
     const r = await registrarRetiro(secretaria, v, { ...datos, rut: '12345678-5', metodoPago: 'tarjeta' })
     expect(r).toMatchObject({
       numeroComprobante: '123', retiroNombre: 'Juan Pérez', retiroRut: '12.345.678-5',
-      retiroMetodoPago: 'tarjeta', retiroUsuarioId: 'u2',
+      retiroMetodoPago: 'tarjeta', retiroUsuarioId: 'u2', sucursalRetiro: 'aysen',
     })
     expect(r.retiroFecha).toBeTruthy()
   })
@@ -147,7 +148,7 @@ describe('Por Pagar', () => {
     await expect(registrarRetiro(secretaria, v, { ...datos, nombre: ' ' })).rejects.toThrow('nombre')
     await expect(registrarRetiro(secretaria, v, { ...datos, comprobante: '' })).rejects.toThrow('comprobante')
     await registrarRetiro(secretaria, v, datos)
-    await expect(api.ventas.registrarRetiro(v.id, { ...datos, usuarioId: 'u2', usuarioNombre: 'S' })).rejects.toThrow('ya fue retirada')
+    await expect(api.ventas.registrarRetiro(v.id, { ...datos, usuarioId: 'u2', usuarioNombre: 'S', sucursal: 'aysen' })).rejects.toThrow('ya fue retirada')
     const normal = await registrarVenta(cajero, base())
     await expect(registrarRetiro(secretaria, normal, datos)).rejects.toThrow('no es Por Pagar')
   })
@@ -165,6 +166,121 @@ describe('Por Pagar', () => {
     expect(pendientes).toHaveLength(1)
     expect(pendientes[0].destino).toBe('aysen')
     expect(await listarVentas(secretaria)).toHaveLength(0) // el alcance general no cambia
+  })
+})
+
+describe('tres sucursales', () => {
+  // Coyhaique tiene dos sucursales: la histórica y una nueva con su propio prefijo y correlativo.
+  const nueva = { id: 'coyhaique_centro', nombre: 'Coyhaique Centro', prefijo: 'CO2', activa: true }
+  const deAysen: UsuarioSesion = { ...cajero, id: 'ua', nombre: 'Ana', usuario: 'ana', sucursal: 'aysen' }
+  const deCoy: UsuarioSesion = { ...cajero, id: 'uc', nombre: 'Carla', usuario: 'carla', sucursal: 'coyhaique' }
+  const deCentro: UsuarioSesion = { ...cajero, id: 'uk', nombre: 'Karla', usuario: 'karla', sucursal: 'coyhaique_centro' }
+  const porPagar = (o: Partial<NuevaVenta> = {}) =>
+    base({ sucursalBoleta: 'aysen', usuarioId: deAysen.id, usuarioNombre: deAysen.nombre,
+      metodoPago: 'por_pagar', tipoVenta: 'por_pagar', numeroComprobante: null, monto: 4000, ...o })
+  const datos = { comprobante: '9', nombre: 'Juan Pérez', rut: '12345678-5', metodoPago: 'efectivo' as const }
+
+  beforeEach(async () => {
+    await api.sucursales.guardar(nueva)
+  })
+
+  it('numera cada sucursal con su propio prefijo y guarda el origen', async () => {
+    const a = await registrarVenta(deCentro, base({ sucursalBoleta: 'coyhaique_centro', destino: 'aysen' }))
+    expect(a.numeroBoleta).toBe('CO2-000001')
+    expect(a.sucursalOrigen).toBe('coyhaique_centro')
+    expect((await registrarVenta(deCoy, base())).numeroBoleta).toBe('COY-000001')
+    expect(await api.ventas.peekNumeroBoleta('coyhaique_centro')).toBe('CO2-000002')
+  })
+
+  it('una carga para una sucursal de Coyhaique no aparece en la otra', async () => {
+    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
+    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique' }))
+    const centro = await porPagarPendientes(deCentro)
+    const coy = await porPagarPendientes(deCoy)
+    expect(centro.map((v) => v.destino)).toEqual(['coyhaique_centro'])
+    expect(coy.map((v) => v.destino)).toEqual(['coyhaique'])
+  })
+
+  it('el admin ve todas las pendientes y puede filtrar por sucursal', async () => {
+    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
+    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique' }))
+    expect(await porPagarPendientes(admin)).toHaveLength(2)
+    const filtradas = await porPagarPendientes(admin, { sucursal: 'coyhaique_centro' })
+    expect(filtradas).toHaveLength(1)
+    expect(filtradas[0].destino).toBe('coyhaique_centro')
+  })
+
+  it('cobrar una carga de otro destino la suma a la caja de quien cobra y deja la sucursal de cobro', async () => {
+    const v = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
+    expect(await porPagarPendientes(deCoy)).toHaveLength(0) // por defecto solo su destino
+    const visibles = await porPagarPendientes(deCoy, { todas: true })
+    expect(visibles.map((x) => x.id)).toEqual([v.id])
+
+    const cobrada = await registrarRetiro(deCoy, v, datos)
+    expect(cobrada).toMatchObject({ sucursalRetiro: 'coyhaique', retiroUsuarioId: 'uc', destino: 'coyhaique_centro' })
+
+    const deCarla = resumenCaja(await ventasDelDia(deCoy), await retirosDelDia(deCoy))
+    expect(deCarla).toMatchObject({ totalEfectivo: 4000, cantidadCobrosOtroDestino: 1, totalCobrosOtroDestino: 4000 })
+    const deKarla = resumenCaja(await ventasDelDia(deCentro), await retirosDelDia(deCentro))
+    expect(deKarla.totalGeneral).toBe(0)
+    expect(await porPagarPendientes(deCentro)).toHaveLength(0) // ya no queda pendiente
+  })
+
+  it('cobrar en el destino no cuenta como cobro de otro destino', async () => {
+    const v = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
+    await registrarRetiro(deCentro, v, datos)
+    const r = resumenCaja([], await retirosDelDia(deCentro))
+    expect(r).toMatchObject({ totalGeneral: 4000, cantidadCobrosOtroDestino: 0 })
+  })
+
+  it('el admin cobra indicando la sucursal; por defecto, el destino de la carga', async () => {
+    const v1 = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
+    const v2 = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique' }))
+    expect((await registrarRetiro(admin, v1, datos)).sucursalRetiro).toBe('coyhaique_centro')
+    expect((await registrarRetiro(admin, v2, { ...datos, sucursal: 'aysen' })).sucursalRetiro).toBe('aysen')
+  })
+
+  it('no permite vender con una sucursal inactiva', async () => {
+    await api.sucursales.guardar({ ...nueva, activa: false })
+    await expect(registrarVenta(deAysen, base({ sucursalBoleta: 'aysen', destino: 'coyhaique_centro' }))).rejects.toThrow('destino')
+    await expect(registrarVenta(deCentro, base({ sucursalBoleta: 'coyhaique_centro' }))).rejects.toThrow('sucursalBoleta')
+  })
+
+  it('respaldo: conserva sucursales, origen y contadores; un respaldo antiguo deduce el origen del prefijo', async () => {
+    await registrarVenta(deCentro, base({ sucursalBoleta: 'coyhaique_centro', destino: 'aysen' }))
+    const r = await api.respaldo.exportar()
+    expect(r.sucursales?.map((s) => s.id)).toContain('coyhaique_centro')
+    resetLocal()
+    await api.respaldo.importar(r)
+    expect(await api.ventas.peekNumeroBoleta('coyhaique_centro')).toBe('CO2-000002')
+
+    const antiguo = { ...r, sucursales: undefined, ventas: r.ventas.map(({ sucursalOrigen: _o, sucursalRetiro: _s, ...v }) => v) }
+    resetLocal()
+    await api.sucursales.guardar(nueva)
+    await api.respaldo.importar(antiguo as never)
+    expect((await api.ventas.listar())[0].sucursalOrigen).toBe('coyhaique_centro')
+  })
+})
+
+describe('gestión de sucursales', () => {
+  it('valida prefijo, nombres repetidos y que quede una activa; el prefijo no cambia al editar', async () => {
+    await expect(guardarSucursal(admin, { nombre: 'Nueva', prefijo: 'X', activa: true })).rejects.toThrow('prefijo')
+    await expect(guardarSucursal(admin, { nombre: 'Nueva', prefijo: 'AYS', activa: true })).rejects.toThrow('prefijo')
+    await expect(guardarSucursal(admin, { nombre: 'aysén', prefijo: 'NUE', activa: true })).rejects.toThrow('nombre')
+
+    await guardarSucursal(admin, { nombre: 'Coyhaique Centro', prefijo: 'co2', activa: true })
+    const creada = (await api.sucursales.listar()).find((s) => s.id === 'coyhaique_centro')
+    expect(creada).toMatchObject({ nombre: 'Coyhaique Centro', prefijo: 'CO2', activa: true })
+
+    await guardarSucursal(admin, { id: 'coyhaique_centro', nombre: 'Centro', prefijo: 'ZZZ', activa: true })
+    expect((await api.sucursales.listar()).find((s) => s.id === 'coyhaique_centro')).toMatchObject({ nombre: 'Centro', prefijo: 'CO2' })
+
+    await guardarSucursal(admin, { id: 'aysen', nombre: 'Aysén', prefijo: 'AYS', activa: false })
+    await guardarSucursal(admin, { id: 'coyhaique_centro', nombre: 'Centro', prefijo: 'CO2', activa: true })
+    await guardarSucursal(admin, { id: 'coyhaique', nombre: 'Coyhaique', prefijo: 'COY', activa: false })
+    await expect(
+      guardarSucursal(admin, { id: 'coyhaique_centro', nombre: 'Centro', prefijo: 'CO2', activa: false }),
+    ).rejects.toThrow('al menos una')
   })
 })
 

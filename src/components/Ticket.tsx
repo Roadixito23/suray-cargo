@@ -5,6 +5,7 @@ import type { Venta } from '../types'
 export type DatosTicket = Pick<
   Venta,
   | 'numeroBoleta'
+  | 'sucursalOrigen'
   | 'destino'
   | 'fecha'
   | 'destinatario'
@@ -42,6 +43,7 @@ export function Ticket({ venta, paquete }: { venta: DatosTicket; paquete: number
         <div className="ticket-encabezado">
           <div>
             <img src="/assets/logo/suraycargo.png" alt="Suray Cargo" className="ticket-logo" />
+            <div className="ticket-destino">Origen: {nombreSucursal(venta.sucursalOrigen)}</div>
             <div className="ticket-destino">Destino: {nombreSucursal(venta.destino)}</div>
           </div>
           <div className="ticket-transaccion">
