@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useUsuario } from '../auth/AuthContext'
 import { Modal } from '../components/Modal'
+import { FilasSkeleton } from '../components/Skeleton'
 import { useToast } from '../components/Toast'
 import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
 import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
@@ -105,7 +106,7 @@ export function RetiroPorPagarPage() {
             </label>
           )}
         </div>
-        <div className="tabla-scroll">
+        <div className="tabla-scroll" aria-busy={cargando}>
           <table>
             <thead>
               <tr>
@@ -114,6 +115,7 @@ export function RetiroPorPagarPage() {
               </tr>
             </thead>
             <tbody>
+              {cargando && pendientes.length === 0 && <FilasSkeleton columnas={8} />}
               {filtradas.map((v) => (
                 <tr key={v.id}>
                   <td>{v.numeroBoleta}</td>

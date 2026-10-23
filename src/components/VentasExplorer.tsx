@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useUsuario } from '../auth/AuthContext'
+import { FilasSkeleton } from './Skeleton'
 import { aInputDate, desdeInputDate, finDelDia } from '../lib/fechas'
 import { api } from '../api'
 import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto } from '../lib/format'
@@ -105,7 +106,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
         </select>
       </div>
 
-      <div className="tabla-scroll">
+      <div className="tabla-scroll" aria-busy={cargando}>
         <table>
           <thead>
             <tr>
@@ -114,6 +115,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
             </tr>
           </thead>
           <tbody>
+            {cargando && ventas.length === 0 && <FilasSkeleton columnas={usuario.esAdmin ? 10 : 9} />}
             {filtradas.map((v) => (
               <tr key={v.id} className={v.anulada ? 'anulada' : ''}>
                 <td>{v.numeroBoleta}{v.anulada && <span className="badge rojo">Anulada</span>}</td>

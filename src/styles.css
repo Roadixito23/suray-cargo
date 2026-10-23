@@ -58,6 +58,16 @@ h2 { font-size: 1.25rem; } h3 { font-size: 1.05rem; margin-top: 1.25rem; }
 hr { border: 0; border-top: 1px solid var(--borde); margin: .6rem 0; }
 small { color: var(--sub); }
 .cargando { padding: 3rem; text-align: center; color: var(--sub); }
+
+/* Skeleton: bloque gris con brillo que lo recorre; los colores salen del tema (claro/oscuro). */
+.skeleton {
+  display: inline-block; vertical-align: middle; height: .9rem; border-radius: 6px; max-width: 100%;
+  background: linear-gradient(90deg, var(--superficie-2) 25%, color-mix(in srgb, var(--texto) 10%, var(--superficie-2)) 50%, var(--superficie-2) 75%);
+  background-size: 200% 100%; animation: skeleton-brillo 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-brillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+.nav-skeleton { display: flex; align-items: center; gap: .7rem; padding: .55rem .75rem; }
 .sub { color: var(--sub); margin-top: -.25rem; }
 .capitalizar { text-transform: capitalize; }
 .rojo-texto { color: var(--rojo); }

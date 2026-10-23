@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { aInputDate, desdeInputDate, finDelDia } from '../lib/fechas'
 import { formatoFechaHora } from '../lib/format'
+import { FilasSkeleton } from '../components/Skeleton'
 import type { RegistroAuditoria, Usuario } from '../types'
 
 const ACCIONES: Record<string, string> = {
@@ -22,6 +23,7 @@ const ACCIONES: Record<string, string> = {
 export function AuditoriaPage() {
   const [registros, setRegistros] = useState<RegistroAuditoria[]>([])
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [cargando, setCargando] = useState(true)
   const [usuarioId, setUsuarioId] = useState('')
   const [accion, setAccion] = useState('')
   const [desde, setDesde] = useState(aInputDate(new Date(Date.now() - 7 * 86_400_000)))
@@ -32,10 +34,12 @@ export function AuditoriaPage() {
   }, [])
 
   const cargar = useCallback(() => {
+    setCargando(true)
     const h = desdeInputDate(hasta)
     api.auditoria
       .listar({ usuarioId: usuarioId || undefined, accion: accion || undefined, desde: desdeInputDate(desde), hasta: h ? finDelDia(h) : undefined })
       .then(setRegistros)
+      .finally(() => setCargando(false))
   }, [usuarioId, accion, desde, hasta])
 
   useEffect(cargar, [cargar])
@@ -55,10 +59,11 @@ export function AuditoriaPage() {
         <label>Hasta <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} /></label>
         <button className="btn" onClick={cargar}>Actualizar</button>
       </div>
-      <div className="tabla-scroll">
+      <div className="tabla-scroll" aria-busy={cargando}>
         <table>
           <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
           <tbody>
+            {cargando && registros.length === 0 && <FilasSkeleton columnas={4} />}
             {registros.map((r) => (
               <tr key={r.id}>
                 <td>{formatoFechaHora(r.timestamp)}</td>
@@ -69,7 +74,7 @@ export function AuditoriaPage() {
             ))}
           </tbody>
         </table>
-        {registros.length === 0 && <p className="vacio">Sin registros.</p>}
+        {!cargando && registros.length === 0 && <p className="vacio">Sin registros.</p>}
       </div>
       <small>Mostrando hasta 200 registros.</small>
     </div>

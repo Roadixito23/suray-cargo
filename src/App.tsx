@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext'
 import { Layout } from './components/Layout'
+import { PantallaInicialSkeleton } from './components/Skeleton'
 import { AnularPage } from './pages/AnularPage'
 import { AuditoriaPage } from './pages/AuditoriaPage'
 import { BuscarPage } from './pages/BuscarPage'
@@ -16,7 +17,7 @@ import { VentaPage } from './pages/VentaPage'
 
 function Protegida({ admin, children }: { admin?: boolean; children: React.ReactNode }) {
   const { usuario, cargando } = useAuth()
-  if (cargando) return <div className="cargando">Cargando…</div>
+  if (cargando) return <PantallaInicialSkeleton />
   if (!usuario) return <Navigate to="/login" replace />
   if (admin && !usuario.esAdmin) return <Navigate to="/ventas" replace />
   return <>{children}</>

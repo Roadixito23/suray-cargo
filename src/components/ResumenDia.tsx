@@ -2,8 +2,10 @@ import { etiquetaMetodo, formatoFechaHora, formatoMonto } from '../lib/format'
 import { ciudadDeSucursal } from '../lib/sucursales'
 import type { ResumenCaja } from '../services/ventas'
 import type { Venta } from '../types'
+import { FilasSkeleton, TarjetasSkeleton } from './Skeleton'
 
-export function TarjetasResumen({ r }: { r: ResumenCaja }) {
+export function TarjetasResumen({ r, cargando }: { r: ResumenCaja; cargando?: boolean }) {
+  if (cargando) return <TarjetasSkeleton />
   const t = (titulo: string, valor: string, sub?: string, destacada?: boolean) => (
     <div className={destacada ? 'tarjeta destacada' : 'tarjeta'}>
       <small>{titulo}</small>
@@ -49,10 +51,10 @@ export function ListaRetiros({ retiros }: { retiros: Venta[] }) {
   )
 }
 
-export function ListaVentasDia({ ventas, admin }: { ventas: Venta[]; admin: boolean }) {
-  if (!ventas.length) return <p className="vacio">Sin ventas.</p>
+export function ListaVentasDia({ ventas, admin, cargando }: { ventas: Venta[]; admin: boolean; cargando?: boolean }) {
+  if (!cargando && !ventas.length) return <p className="vacio">Sin ventas.</p>
   return (
-    <div className="tabla-scroll">
+    <div className="tabla-scroll" aria-busy={cargando}>
       <table>
         <thead>
           <tr>
@@ -60,7 +62,8 @@ export function ListaVentasDia({ ventas, admin }: { ventas: Venta[]; admin: bool
           </tr>
         </thead>
         <tbody>
-          {ventas.map((v) => (
+          {cargando && <FilasSkeleton columnas={admin ? 6 : 5} filas={4} />}
+          {!cargando && ventas.map((v) => (
             <tr key={v.id} className={v.anulada ? 'anulada' : ''}>
               <td>{v.numeroBoleta}{v.anulada && <span className="badge rojo">Anulada</span>}</td>
               <td>{formatoFechaHora(v.fecha).slice(-5)}</td>

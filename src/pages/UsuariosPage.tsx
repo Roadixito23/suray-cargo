@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
 import { useUsuario } from '../auth/AuthContext'
 import { Modal } from '../components/Modal'
+import { FilasSkeleton } from '../components/Skeleton'
 import { useToast } from '../components/Toast'
 import { formatoFecha, nombreSucursal } from '../lib/format'
 import { useSucursales } from '../lib/sucursales'
@@ -15,11 +16,12 @@ export function UsuariosPage() {
   const toast = useToast()
   const sucursales = useSucursales()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [cargando, setCargando] = useState(true)
   const [form, setForm] = useState<DatosUsuario | null>(null)
   const [borrar, setBorrar] = useState<Usuario | null>(null)
 
   const cargar = useCallback(() => {
-    api.usuarios.listar().then(setUsuarios)
+    api.usuarios.listar().then(setUsuarios).finally(() => setCargando(false))
   }, [])
   useEffect(cargar, [cargar])
 
@@ -54,10 +56,11 @@ export function UsuariosPage() {
       <div className="filtros">
         <button className="btn primario" onClick={() => setForm(vacio(sucursales.find((s) => s.activa)?.id ?? ''))}>+ Nuevo usuario</button>
       </div>
-      <div className="tabla-scroll">
+      <div className="tabla-scroll" aria-busy={cargando}>
         <table>
           <thead><tr><th>Nombre</th><th>Usuario</th><th>Sucursal</th><th>Rol</th><th>Creado</th><th /></tr></thead>
           <tbody>
+            {cargando && <FilasSkeleton columnas={6} />}
             {usuarios.map((u) => (
               <tr key={u.id}>
                 <td>{u.nombre}</td>

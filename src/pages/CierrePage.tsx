@@ -17,10 +17,16 @@ export function CierrePage() {
   const [ventas, setVentas] = useState<Venta[]>([])
   const [retiros, setRetiros] = useState<Venta[]>([])
   const [confirmar, setConfirmar] = useState(false)
+  const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    ventasDelDia(usuario).then(setVentas)
-    retirosDelDia(usuario).then(setRetiros)
+    setCargando(true)
+    Promise.all([ventasDelDia(usuario), retirosDelDia(usuario)])
+      .then(([v, r]) => {
+        setVentas(v)
+        setRetiros(r)
+      })
+      .finally(() => setCargando(false))
   }, [usuario])
 
   const resumen = useMemo(() => resumenCaja(ventas, retiros), [ventas, retiros])
@@ -37,11 +43,11 @@ export function CierrePage() {
     <div className="panel">
       <h2>Cierre de caja — {formatoFecha(new Date())}</h2>
       <p className="sub">Cierre individual de {usuario.nombre}: solo tus ventas y cobros del día</p>
-      <TarjetasResumen r={resumen} />
-      <button className="btn primario grande" onClick={() => setConfirmar(true)}>Realizar cierre de caja</button>
+      <TarjetasResumen r={resumen} cargando={cargando} />
+      <button className="btn primario grande" disabled={cargando} onClick={() => setConfirmar(true)}>Realizar cierre de caja</button>
 
       <h3>Ventas del día</h3>
-      <ListaVentasDia ventas={activas} admin={false} />
+      <ListaVentasDia ventas={activas} admin={false} cargando={cargando} />
       {retiros.length > 0 && (
         <>
           <h3>Retiros Por Pagar cobrados hoy</h3>

@@ -18,10 +18,16 @@ export function HistoricoPage() {
   const [dia, setDia] = useState<Date>(hoy)
   const [ventas, setVentas] = useState<Venta[]>([])
   const [retiros, setRetiros] = useState<Venta[]>([])
+  const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
-    listarVentas(usuario, { desde: limite }).then(setVentas)
-    retirosDesde(usuario, limite).then(setRetiros)
+    setCargando(true)
+    Promise.all([listarVentas(usuario, { desde: limite }), retirosDesde(usuario, limite)])
+      .then(([v, r]) => {
+        setVentas(v)
+        setRetiros(r)
+      })
+      .finally(() => setCargando(false))
   }, [usuario, limite])
 
   // Igual que el cierre del día: los retiros Por Pagar cuentan en el día en que se cobraron.
@@ -84,8 +90,8 @@ export function HistoricoPage() {
 
       <div className="panel">
         <h2 className="capitalizar">{diaLargo.format(dia)}</h2>
-        <TarjetasResumen r={resumenCaja(delDia, retirosDelDia)} />
-        <ListaVentasDia ventas={delDia} admin={usuario.esAdmin} />
+        <TarjetasResumen r={resumenCaja(delDia, retirosDelDia)} cargando={cargando} />
+        <ListaVentasDia ventas={delDia} admin={usuario.esAdmin} cargando={cargando} />
       </div>
     </div>
   )
