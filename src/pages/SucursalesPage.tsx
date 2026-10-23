@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useUsuario } from '../auth/AuthContext'
 import { Modal } from '../components/Modal'
 import { useToast } from '../components/Toast'
-import { useSucursales } from '../lib/sucursales'
+import { ciudadesDe, useSucursales } from '../lib/sucursales'
 import { guardarSucursal, type DatosSucursal } from '../services/sucursales'
 
-const VACIA: DatosSucursal = { nombre: '', prefijo: '', activa: true }
+const VACIA: DatosSucursal = { nombre: '', ciudad: '', prefijo: '', activa: true }
 
 export function SucursalesPage() {
   const actor = useUsuario()
@@ -29,23 +29,25 @@ export function SucursalesPage() {
   return (
     <div className="panel">
       <p className="sub">
-        Las sucursales activas se pueden elegir como origen y destino de un envío y asignar a usuarios.
-        Una sucursal nunca se borra: se desactiva y su historial se conserva.
+        Cada sucursal pertenece a una ciudad. Los envíos se emiten desde una sucursal y se dirigen a una ciudad:
+        la carga Por Pagar la ven y pueden cobrar todas las sucursales de esa ciudad. Una sucursal nunca se borra:
+        se desactiva y su historial se conserva.
       </p>
       <div className="filtros">
         <button className="btn primario" onClick={() => setForm(VACIA)}>+ Nueva sucursal</button>
       </div>
       <div className="tabla-scroll">
         <table>
-          <thead><tr><th>Nombre</th><th>Prefijo de boleta</th><th>Estado</th><th /></tr></thead>
+          <thead><tr><th>Nombre</th><th>Ciudad</th><th>Prefijo de boleta</th><th>Estado</th><th /></tr></thead>
           <tbody>
             {sucursales.map((s) => (
               <tr key={s.id}>
                 <td>{s.nombre}</td>
+                <td>{s.ciudad}</td>
                 <td>{s.prefijo}</td>
                 <td><span className={s.activa ? 'badge azul' : 'badge'}>{s.activa ? 'Activa' : 'Inactiva'}</span></td>
                 <td className="acciones">
-                  <button className="btn" onClick={() => setForm({ id: s.id, nombre: s.nombre, prefijo: s.prefijo, activa: s.activa })}>
+                  <button className="btn" onClick={() => setForm({ id: s.id, nombre: s.nombre, ciudad: s.ciudad, prefijo: s.prefijo, activa: s.activa })}>
                     Editar
                   </button>
                 </td>
@@ -69,6 +71,26 @@ export function SucursalesPage() {
           <label className="campo">
             <span className="etiqueta">Nombre</span>
             <input value={form.nombre} onChange={(e) => set({ nombre: e.target.value })} autoFocus />
+          </label>
+          <label className="campo">
+            <span className="etiqueta">Ciudad</span>
+            <input
+              value={form.ciudad}
+              disabled={!!form.id}
+              list="ciudades-existentes"
+              onChange={(e) => set({ ciudad: e.target.value })}
+              placeholder="Coyhaique"
+            />
+            <datalist id="ciudades-existentes">
+              {ciudadesDe(sucursales).map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            <small>
+              {form.id
+                ? 'La ciudad no se puede cambiar: los envíos ya emitidos apuntan a ella.'
+                : 'Elige una ciudad existente o escribe una nueva.'}
+            </small>
           </label>
           <label className="campo">
             <span className="etiqueta">Prefijo de boleta (2 a 4 letras o números)</span>

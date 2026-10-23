@@ -1,4 +1,5 @@
-import { etiquetaMetodo, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, formatoFechaHora, formatoMonto } from '../lib/format'
+import { ciudadDeSucursal } from '../lib/sucursales'
 import type { Venta } from '../types'
 
 /** Datos mínimos para dibujar un ticket (permite la vista previa con el formulario a medias). */
@@ -43,8 +44,8 @@ export function Ticket({ venta, paquete }: { venta: DatosTicket; paquete: number
         <div className="ticket-encabezado">
           <div>
             <img src="/assets/logo/suraycargo.png" alt="Suray Cargo" className="ticket-logo" />
-            <div className="ticket-destino">Origen: {nombreSucursal(venta.sucursalOrigen)}</div>
-            <div className="ticket-destino">Destino: {nombreSucursal(venta.destino)}</div>
+            <div className="ticket-destino">Origen: {ciudadDeSucursal(venta.sucursalOrigen)}</div>
+            <div className="ticket-destino">Destino: {venta.destino}</div>
           </div>
           <div className="ticket-transaccion">
             <div className="ticket-rut">RUT: {RUT_EMPRESA}</div>

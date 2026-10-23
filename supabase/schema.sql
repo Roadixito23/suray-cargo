@@ -14,10 +14,12 @@ create extension if not exists pgcrypto;
 create table sucursales (
   id text primary key check (id ~ '^[a-z0-9_]{2,30}$'),
   nombre text not null,
+  ciudad text not null, -- el destino de un envío es una ciudad: la ven y cobran todas sus sucursales
   prefijo text not null unique check (prefijo ~ '^[A-Z0-9]{2,4}$'),
   activa boolean not null default true
 );
-insert into sucursales (id, nombre, prefijo) values ('aysen', 'Aysén', 'AYS'), ('coyhaique', 'Coyhaique', 'COY');
+insert into sucursales (id, nombre, ciudad, prefijo) values
+  ('aysen', 'Aysén', 'Puerto Aysén', 'AYS'), ('coyhaique', 'Coyhaique', 'Coyhaique', 'COY');
 
 create table usuarios (
   id text primary key,
@@ -37,7 +39,7 @@ create table ventas (
   fecha timestamptz not null default now(),
   descripcion text,
   sucursal_origen text not null references sucursales (id), -- quien emite la boleta
-  destino text not null references sucursales (id),
+  destino text not null, -- ciudad de destino (ver sucursales.ciudad)
   item text not null,
   cantidad text not null,
   tipo_producto text not null,
@@ -187,8 +189,11 @@ begin
   if v_prefijo is null then
     raise exception 'sucursalBoleta inválida o inactiva';
   end if;
-  if not exists (select 1 from sucursales where id = v ->> 'destino' and activa) then
+  if not exists (select 1 from sucursales where ciudad = v ->> 'destino' and activa) then
     raise exception 'destino inválido o inactivo';
+  end if;
+  if exists (select 1 from sucursales where id = v_sucursal and ciudad = v ->> 'destino') then
+    raise exception 'El destino no puede ser la misma ciudad de origen';
   end if;
 
   update contadores set valor = valor + 1 where sucursal = v_sucursal returning valor into v_num;
@@ -241,8 +246,9 @@ begin
 
   -- Primero las sucursales: usuarios y ventas dependen de ellas (el trigger crea sus contadores).
   for r in select * from jsonb_array_elements(coalesce(p_datos -> 'sucursales', '[]'::jsonb)) loop
-    insert into sucursales (id, nombre, prefijo, activa)
-    values (r ->> 'id', r ->> 'nombre', r ->> 'prefijo', coalesce((r ->> 'activa')::boolean, true))
+    insert into sucursales (id, nombre, prefijo, ciudad, activa)
+    values (r ->> 'id', r ->> 'nombre', r ->> 'prefijo', coalesce(r ->> 'ciudad', r ->> 'nombre'),
+            coalesce((r ->> 'activa')::boolean, true))
     on conflict (id) do update set nombre = excluded.nombre, activa = excluded.activa;
   end loop;
 
@@ -272,14 +278,18 @@ begin
       sucursal_retiro
     ) values (
       r ->> 'id', r ->> 'numeroBoleta', (r ->> 'monto')::numeric, r ->> 'metodoPago', (r ->> 'fecha')::timestamptz,
-      r ->> 'descripcion', r ->> 'destino', coalesce(r ->> 'sucursalOrigen', v_suc), r ->> 'item', r ->> 'cantidad',
+      r ->> 'descripcion', coalesce((select s.ciudad from sucursales s where s.id = r ->> 'destino'), r ->> 'destino'),
+      coalesce(r ->> 'sucursalOrigen', v_suc), r ->> 'item', r ->> 'cantidad',
       r ->> 'tipoProducto', r -> 'tiposArticulos', r ->> 'destinatario', r ->> 'remitente', r ->> 'usuarioId',
       r ->> 'usuarioNombre', coalesce(r ->> 'numeroComprobante', r ->> 'numeroOperacion'),
       coalesce((r ->> 'anulada')::boolean, false), r ->> 'motivoAnulacion',
       (r ->> 'fechaAnulacion')::timestamptz, r ->> 'usuarioAnulacion', r ->> 'tipoVenta',
       (r ->> 'retiroFecha')::timestamptz, r ->> 'retiroNombre', r ->> 'retiroRut', r ->> 'retiroMetodoPago',
       r ->> 'retiroUsuarioId', r ->> 'retiroUsuarioNombre',
-      case when r ->> 'retiroFecha' is null then null else coalesce(r ->> 'sucursalRetiro', r ->> 'destino') end
+      case when r ->> 'retiroFecha' is null then null else coalesce(
+        r ->> 'sucursalRetiro',
+        (select s.id from sucursales s where s.ciudad = coalesce((select c.ciudad from sucursales c where c.id = r ->> 'destino'), r ->> 'destino') order by s.id limit 1)
+      ) end
     )
     on conflict (id) do update set
       numero_boleta = excluded.numero_boleta, monto = excluded.monto, metodo_pago = excluded.metodo_pago,

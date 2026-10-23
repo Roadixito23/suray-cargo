@@ -6,7 +6,8 @@ import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
 import {
   anularVenta, listarVentas, porPagarPendientes, registrarRetiro, registrarVenta, resumenCaja, retirosDelDia, ventasDelDia,
 } from './ventas'
-import { guardarSucursal } from './sucursales'
+import { ciudadDeSucursal } from '../lib/sucursales'
+import { cargarSucursales, guardarSucursal, type DatosSucursal } from './sucursales'
 import { login } from './usuarios'
 
 const cajero: UsuarioSesion = {
@@ -15,18 +16,21 @@ const cajero: UsuarioSesion = {
 const admin: UsuarioSesion = { ...cajero, id: 'a1', nombre: 'Admin', usuario: 'admin', esAdmin: true }
 
 const base = (o: Partial<NuevaVenta> = {}): NuevaVenta => ({
-  sucursalBoleta: 'coyhaique', monto: 1000, metodoPago: 'efectivo', destino: 'aysen', item: '1', cantidad: '1',
+  sucursalBoleta: 'coyhaique', monto: 1000, metodoPago: 'efectivo', destino: 'Puerto Aysén', item: '1', cantidad: '1',
   tipoProducto: 'Caja', destinatario: 'A', remitente: 'B', usuarioId: cajero.id, usuarioNombre: cajero.nombre,
   tipoVenta: 'venta', ...o,
 })
 
-beforeEach(() => resetLocal())
+beforeEach(async () => {
+  resetLocal()
+  await cargarSucursales() // el catálogo en memoria se reinicia junto con el almacenamiento local
+})
 
 describe('boletas', () => {
   it('numera correlativo por sucursal', async () => {
     expect((await registrarVenta(cajero, base())).numeroBoleta).toBe('COY-000001')
     expect((await registrarVenta(cajero, base())).numeroBoleta).toBe('COY-000002')
-    expect((await registrarVenta(cajero, base({ sucursalBoleta: 'aysen' }))).numeroBoleta).toBe('AYS-000001')
+    expect((await registrarVenta(cajero, base({ sucursalBoleta: 'aysen', destino: 'Coyhaique' }))).numeroBoleta).toBe('AYS-000001')
     expect(await api.ventas.peekNumeroBoleta('coyhaique')).toBe('COY-000003')
   })
 })
@@ -161,126 +165,140 @@ describe('Por Pagar', () => {
 
   it('la secretaria de destino ve las pendientes de su sucursal y no las de otra', async () => {
     await registrarVenta(cajero, porPagar()) // coyhaique → aysen
-    await registrarVenta(cajero, porPagar({ destino: 'coyhaique' }))
+    await registrarVenta(cajero, porPagar({ sucursalBoleta: 'aysen', destino: 'Coyhaique' })) // no es para Aysén
     const pendientes = await porPagarPendientes(secretaria)
     expect(pendientes).toHaveLength(1)
-    expect(pendientes[0].destino).toBe('aysen')
+    expect(pendientes[0].destino).toBe('Puerto Aysén')
     expect(await listarVentas(secretaria)).toHaveLength(0) // el alcance general no cambia
   })
 })
 
-describe('tres sucursales', () => {
-  // Coyhaique tiene dos sucursales: la histórica y una nueva con su propio prefijo y correlativo.
-  const nueva = { id: 'coyhaique_centro', nombre: 'Coyhaique Centro', prefijo: 'CO2', activa: true }
+describe('ciudades con varias sucursales', () => {
+  // Coyhaique tiene dos sucursales: la histórica y el Terminal, con su propio prefijo y correlativo.
+  const terminal = { id: 'terminal', nombre: 'Terminal de Coyhaique', ciudad: 'Coyhaique', prefijo: 'TER', activa: true }
   const deAysen: UsuarioSesion = { ...cajero, id: 'ua', nombre: 'Ana', usuario: 'ana', sucursal: 'aysen' }
   const deCoy: UsuarioSesion = { ...cajero, id: 'uc', nombre: 'Carla', usuario: 'carla', sucursal: 'coyhaique' }
-  const deCentro: UsuarioSesion = { ...cajero, id: 'uk', nombre: 'Karla', usuario: 'karla', sucursal: 'coyhaique_centro' }
+  const deTerminal: UsuarioSesion = { ...cajero, id: 'uk', nombre: 'Karla', usuario: 'karla', sucursal: 'terminal' }
+  const desdeAysen = (o: Partial<NuevaVenta> = {}) =>
+    base({ sucursalBoleta: 'aysen', destino: 'Coyhaique', usuarioId: deAysen.id, usuarioNombre: deAysen.nombre, ...o })
   const porPagar = (o: Partial<NuevaVenta> = {}) =>
-    base({ sucursalBoleta: 'aysen', usuarioId: deAysen.id, usuarioNombre: deAysen.nombre,
-      metodoPago: 'por_pagar', tipoVenta: 'por_pagar', numeroComprobante: null, monto: 4000, ...o })
+    desdeAysen({ metodoPago: 'por_pagar', tipoVenta: 'por_pagar', numeroComprobante: null, monto: 4000, ...o })
   const datos = { comprobante: '9', nombre: 'Juan Pérez', rut: '12345678-5', metodoPago: 'efectivo' as const }
 
   beforeEach(async () => {
-    await api.sucursales.guardar(nueva)
+    await api.sucursales.guardar(terminal)
+    await cargarSucursales()
   })
 
-  it('numera cada sucursal con su propio prefijo y guarda el origen', async () => {
-    const a = await registrarVenta(deCentro, base({ sucursalBoleta: 'coyhaique_centro', destino: 'aysen' }))
-    expect(a.numeroBoleta).toBe('CO2-000001')
-    expect(a.sucursalOrigen).toBe('coyhaique_centro')
-    expect((await registrarVenta(deCoy, base())).numeroBoleta).toBe('COY-000001')
-    expect(await api.ventas.peekNumeroBoleta('coyhaique_centro')).toBe('CO2-000002')
+  it('numera cada sucursal con su propio prefijo y guarda el origen; el ticket sale por ciudad', async () => {
+    const a = await registrarVenta(deTerminal, base({ sucursalBoleta: 'terminal', destino: 'Puerto Aysén' }))
+    expect(a).toMatchObject({ numeroBoleta: 'TER-000001', sucursalOrigen: 'terminal', destino: 'Puerto Aysén' })
+    expect(ciudadDeSucursal(a.sucursalOrigen)).toBe('Coyhaique')
+    expect((await registrarVenta(deCoy, base({ sucursalBoleta: 'coyhaique', destino: 'Puerto Aysén' }))).numeroBoleta).toBe('COY-000001')
+    expect(await api.ventas.peekNumeroBoleta('terminal')).toBe('TER-000002')
   })
 
-  it('una carga para una sucursal de Coyhaique no aparece en la otra', async () => {
-    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
-    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique' }))
-    const centro = await porPagarPendientes(deCentro)
-    const coy = await porPagarPendientes(deCoy)
-    expect(centro.map((v) => v.destino)).toEqual(['coyhaique_centro'])
-    expect(coy.map((v) => v.destino)).toEqual(['coyhaique'])
+  it('no se puede enviar a la misma ciudad de origen ni a una ciudad sin sucursales', async () => {
+    await expect(registrarVenta(deTerminal, base({ sucursalBoleta: 'terminal', destino: 'Coyhaique' }))).rejects.toThrow('misma ciudad')
+    await expect(registrarVenta(deAysen, desdeAysen({ destino: 'Santiago' }))).rejects.toThrow('destino')
   })
 
-  it('el admin ve todas las pendientes y puede filtrar por sucursal', async () => {
-    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
-    await registrarVenta(deAysen, porPagar({ destino: 'coyhaique' }))
+  it('una carga para Coyhaique la ven las dos sucursales de Coyhaique, y no la de Aysén', async () => {
+    const v = await registrarVenta(deAysen, porPagar())
+    expect((await porPagarPendientes(deCoy)).map((x) => x.id)).toEqual([v.id])
+    expect((await porPagarPendientes(deTerminal)).map((x) => x.id)).toEqual([v.id])
+    expect(await porPagarPendientes(deAysen)).toHaveLength(0)
+  })
+
+  it('cualquiera de las dos sucursales de la ciudad la cobra y deja de estar pendiente para ambas', async () => {
+    const v = await registrarVenta(deAysen, porPagar())
+    const cobrada = await registrarRetiro(deTerminal, v, datos)
+    expect(cobrada).toMatchObject({ sucursalRetiro: 'terminal', retiroUsuarioId: 'uk', destino: 'Coyhaique' })
+    expect(await porPagarPendientes(deCoy)).toHaveLength(0)
+    const deKarla = resumenCaja(await ventasDelDia(deTerminal), await retirosDelDia(deTerminal))
+    expect(deKarla).toMatchObject({ totalEfectivo: 4000, cantidadCobrosOtroDestino: 0 })
+    expect(resumenCaja(await ventasDelDia(deCoy), await retirosDelDia(deCoy)).totalGeneral).toBe(0)
+  })
+
+  it('el admin ve todas las pendientes y filtra por ciudad', async () => {
+    await registrarVenta(deAysen, porPagar())
+    await registrarVenta(deCoy, base({ sucursalBoleta: 'coyhaique', destino: 'Puerto Aysén', metodoPago: 'por_pagar', tipoVenta: 'por_pagar', numeroComprobante: null }))
     expect(await porPagarPendientes(admin)).toHaveLength(2)
-    const filtradas = await porPagarPendientes(admin, { sucursal: 'coyhaique_centro' })
-    expect(filtradas).toHaveLength(1)
-    expect(filtradas[0].destino).toBe('coyhaique_centro')
+    expect((await porPagarPendientes(admin, { ciudad: 'Coyhaique' })).map((v) => v.destino)).toEqual(['Coyhaique'])
+    expect((await porPagarPendientes(admin, { ciudad: 'Puerto Aysén' })).map((v) => v.destino)).toEqual(['Puerto Aysén'])
   })
 
-  it('cobrar una carga de otro destino la suma a la caja de quien cobra y deja la sucursal de cobro', async () => {
-    const v = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
-    expect(await porPagarPendientes(deCoy)).toHaveLength(0) // por defecto solo su destino
-    const visibles = await porPagarPendientes(deCoy, { todas: true })
-    expect(visibles.map((x) => x.id)).toEqual([v.id])
+  it('cobrar una carga de otra ciudad la suma a la caja de quien cobra y lo marca como cobro de otro destino', async () => {
+    const v = await registrarVenta(deAysen, porPagar())
+    expect(await porPagarPendientes(deAysen)).toHaveLength(0) // por defecto solo su ciudad
+    expect((await porPagarPendientes(deAysen, { todas: true })).map((x) => x.id)).toEqual([v.id])
 
-    const cobrada = await registrarRetiro(deCoy, v, datos)
-    expect(cobrada).toMatchObject({ sucursalRetiro: 'coyhaique', retiroUsuarioId: 'uc', destino: 'coyhaique_centro' })
-
-    const deCarla = resumenCaja(await ventasDelDia(deCoy), await retirosDelDia(deCoy))
-    expect(deCarla).toMatchObject({ totalEfectivo: 4000, cantidadCobrosOtroDestino: 1, totalCobrosOtroDestino: 4000 })
-    const deKarla = resumenCaja(await ventasDelDia(deCentro), await retirosDelDia(deCentro))
-    expect(deKarla.totalGeneral).toBe(0)
-    expect(await porPagarPendientes(deCentro)).toHaveLength(0) // ya no queda pendiente
+    const cobrada = await registrarRetiro(deAysen, v, datos)
+    expect(cobrada).toMatchObject({ sucursalRetiro: 'aysen', retiroUsuarioId: 'ua', destino: 'Coyhaique' })
+    const deAna = resumenCaja(await ventasDelDia(deAysen), await retirosDelDia(deAysen))
+    expect(deAna).toMatchObject({ totalEfectivo: 4000, cantidadCobrosOtroDestino: 1, totalCobrosOtroDestino: 4000 })
+    expect(await porPagarPendientes(deTerminal)).toHaveLength(0)
   })
 
-  it('cobrar en el destino no cuenta como cobro de otro destino', async () => {
-    const v = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
-    await registrarRetiro(deCentro, v, datos)
-    const r = resumenCaja([], await retirosDelDia(deCentro))
-    expect(r).toMatchObject({ totalGeneral: 4000, cantidadCobrosOtroDestino: 0 })
-  })
-
-  it('el admin cobra indicando la sucursal; por defecto, el destino de la carga', async () => {
-    const v1 = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique_centro' }))
-    const v2 = await registrarVenta(deAysen, porPagar({ destino: 'coyhaique' }))
-    expect((await registrarRetiro(admin, v1, datos)).sucursalRetiro).toBe('coyhaique_centro')
+  it('el admin cobra en una sucursal de la ciudad destino salvo que indique otra', async () => {
+    const v1 = await registrarVenta(deAysen, porPagar())
+    const v2 = await registrarVenta(deAysen, porPagar())
+    expect(['coyhaique', 'terminal']).toContain((await registrarRetiro(admin, v1, datos)).sucursalRetiro)
     expect((await registrarRetiro(admin, v2, { ...datos, sucursal: 'aysen' })).sucursalRetiro).toBe('aysen')
   })
 
-  it('no permite vender con una sucursal inactiva', async () => {
-    await api.sucursales.guardar({ ...nueva, activa: false })
-    await expect(registrarVenta(deAysen, base({ sucursalBoleta: 'aysen', destino: 'coyhaique_centro' }))).rejects.toThrow('destino')
-    await expect(registrarVenta(deCentro, base({ sucursalBoleta: 'coyhaique_centro' }))).rejects.toThrow('sucursalBoleta')
+  it('no permite vender desde o hacia sucursales inactivas', async () => {
+    await api.sucursales.guardar({ ...terminal, activa: false })
+    await api.sucursales.guardar({ id: 'coyhaique', nombre: 'Coyhaique', ciudad: 'Coyhaique', prefijo: 'COY', activa: false })
+    await cargarSucursales()
+    await expect(registrarVenta(deAysen, desdeAysen())).rejects.toThrow('destino') // Coyhaique ya no tiene sucursales activas
+    await expect(registrarVenta(deTerminal, base({ sucursalBoleta: 'terminal', destino: 'Puerto Aysén' }))).rejects.toThrow('sucursalBoleta')
   })
 
-  it('respaldo: conserva sucursales, origen y contadores; un respaldo antiguo deduce el origen del prefijo', async () => {
-    await registrarVenta(deCentro, base({ sucursalBoleta: 'coyhaique_centro', destino: 'aysen' }))
+  it('respaldo: conserva sucursales, origen y contadores; uno antiguo traduce el destino a ciudad', async () => {
+    await registrarVenta(deTerminal, base({ sucursalBoleta: 'terminal', destino: 'Puerto Aysén' }))
     const r = await api.respaldo.exportar()
-    expect(r.sucursales?.map((s) => s.id)).toContain('coyhaique_centro')
+    expect(r.sucursales?.find((x) => x.id === 'terminal')?.ciudad).toBe('Coyhaique')
     resetLocal()
     await api.respaldo.importar(r)
-    expect(await api.ventas.peekNumeroBoleta('coyhaique_centro')).toBe('CO2-000002')
+    expect(await api.ventas.peekNumeroBoleta('terminal')).toBe('TER-000002')
 
-    const antiguo = { ...r, sucursales: undefined, ventas: r.ventas.map(({ sucursalOrigen: _o, sucursalRetiro: _s, ...v }) => v) }
+    // Respaldo anterior a las ciudades: el destino era el id de una sucursal y no había origen.
+    const antiguo = {
+      ...r,
+      sucursales: undefined,
+      ventas: r.ventas.map(({ sucursalOrigen: _o, sucursalRetiro: _s, ...v }) => ({ ...v, destino: 'coyhaique', numeroBoleta: 'AYS-000007' })),
+    }
     resetLocal()
-    await api.sucursales.guardar(nueva)
     await api.respaldo.importar(antiguo as never)
-    expect((await api.ventas.listar())[0].sucursalOrigen).toBe('coyhaique_centro')
+    expect((await api.ventas.listar())[0]).toMatchObject({ destino: 'Coyhaique', sucursalOrigen: 'aysen' })
   })
 })
 
 describe('gestión de sucursales', () => {
-  it('valida prefijo, nombres repetidos y que quede una activa; el prefijo no cambia al editar', async () => {
-    await expect(guardarSucursal(admin, { nombre: 'Nueva', prefijo: 'X', activa: true })).rejects.toThrow('prefijo')
-    await expect(guardarSucursal(admin, { nombre: 'Nueva', prefijo: 'AYS', activa: true })).rejects.toThrow('prefijo')
-    await expect(guardarSucursal(admin, { nombre: 'aysén', prefijo: 'NUE', activa: true })).rejects.toThrow('nombre')
+  it('valida ciudad, prefijo, nombres repetidos y que quede una activa; prefijo y ciudad no cambian al editar', async () => {
+    const nueva = (o: Partial<DatosSucursal>) => ({ nombre: 'Nueva', ciudad: 'Coyhaique', prefijo: 'NUE', activa: true, ...o })
+    await expect(guardarSucursal(admin, nueva({ prefijo: 'X' }))).rejects.toThrow('prefijo')
+    await expect(guardarSucursal(admin, nueva({ prefijo: 'AYS' }))).rejects.toThrow('prefijo')
+    await expect(guardarSucursal(admin, nueva({ nombre: 'aysén' }))).rejects.toThrow('nombre')
+    await expect(guardarSucursal(admin, nueva({ ciudad: ' ' }))).rejects.toThrow('ciudad')
 
-    await guardarSucursal(admin, { nombre: 'Coyhaique Centro', prefijo: 'co2', activa: true })
-    const creada = (await api.sucursales.listar()).find((s) => s.id === 'coyhaique_centro')
-    expect(creada).toMatchObject({ nombre: 'Coyhaique Centro', prefijo: 'CO2', activa: true })
+    // "coyhaique" en minúsculas reutiliza la ciudad existente en vez de crear otra.
+    await guardarSucursal(admin, nueva({ nombre: 'Terminal de Coyhaique', ciudad: 'coyhaique', prefijo: 'ter' }))
+    expect((await api.sucursales.listar()).find((s) => s.id === 'terminal_de_coyhaique')).toMatchObject({
+      nombre: 'Terminal de Coyhaique', ciudad: 'Coyhaique', prefijo: 'TER', activa: true,
+    })
 
-    await guardarSucursal(admin, { id: 'coyhaique_centro', nombre: 'Centro', prefijo: 'ZZZ', activa: true })
-    expect((await api.sucursales.listar()).find((s) => s.id === 'coyhaique_centro')).toMatchObject({ nombre: 'Centro', prefijo: 'CO2' })
+    await guardarSucursal(admin, { id: 'terminal_de_coyhaique', nombre: 'Terminal', ciudad: 'Otra', prefijo: 'ZZZ', activa: true })
+    expect((await api.sucursales.listar()).find((s) => s.id === 'terminal_de_coyhaique')).toMatchObject({
+      nombre: 'Terminal', ciudad: 'Coyhaique', prefijo: 'TER',
+    })
 
-    await guardarSucursal(admin, { id: 'aysen', nombre: 'Aysén', prefijo: 'AYS', activa: false })
-    await guardarSucursal(admin, { id: 'coyhaique_centro', nombre: 'Centro', prefijo: 'CO2', activa: true })
-    await guardarSucursal(admin, { id: 'coyhaique', nombre: 'Coyhaique', prefijo: 'COY', activa: false })
-    await expect(
-      guardarSucursal(admin, { id: 'coyhaique_centro', nombre: 'Centro', prefijo: 'CO2', activa: false }),
-    ).rejects.toThrow('al menos una')
+    const editar = (id: string, nombre: string, ciudad: string, prefijo: string, activa: boolean) =>
+      guardarSucursal(admin, { id, nombre, ciudad, prefijo, activa })
+    await editar('aysen', 'Aysén', 'Puerto Aysén', 'AYS', false)
+    await editar('coyhaique', 'Coyhaique', 'Coyhaique', 'COY', false)
+    await expect(editar('terminal_de_coyhaique', 'Terminal', 'Coyhaique', 'TER', false)).rejects.toThrow('al menos una')
   })
 })
 
@@ -288,11 +306,11 @@ describe('envíos que llegan a la sucursal', () => {
   it('un usuario de destino los encuentra con destinoLlegada, sin ampliar el alcance por defecto', async () => {
     const receptor: UsuarioSesion = { ...cajero, id: 'u2', nombre: 'Receptor', usuario: 'rec', sucursal: 'aysen' }
     await registrarVenta(cajero, base()) // coyhaique → aysen, efectivo
-    await registrarVenta(cajero, base({ destino: 'coyhaique' })) // no llega a Aysen
+    await registrarVenta(cajero, base({ sucursalBoleta: 'aysen', destino: 'Coyhaique' })) // no llega a Aysén
     expect(await listarVentas(receptor)).toHaveLength(0)
-    const llegadas = await listarVentas(receptor, { destinoLlegada: 'aysen' })
+    const llegadas = await listarVentas(receptor, { destinoLlegada: 'Puerto Aysén' })
     expect(llegadas).toHaveLength(1)
-    expect(llegadas[0].destino).toBe('aysen')
+    expect(llegadas[0].destino).toBe('Puerto Aysén')
   })
 })
 

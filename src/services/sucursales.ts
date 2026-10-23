@@ -23,10 +23,15 @@ export function idDesdeNombre(nombre: string): string {
     .slice(0, 30)
 }
 
+const sinTildes = (t: string) =>
+  t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+
 export interface DatosSucursal {
   /** Presente al editar una sucursal existente. */
   id?: string
   nombre: string
+  /** Ciudad a la que pertenece; solo se define al crear. */
+  ciudad: string
   prefijo: string
   activa: boolean
 }
@@ -44,7 +49,12 @@ export async function guardarSucursal(actor: UsuarioSesion, datos: DatosSucursal
     throw new Error('Ya existe una sucursal con ese nombre')
   }
 
+  // Una ciudad ya existente se reutiliza con su grafía (así "coyhaique" no crea una ciudad distinta de "Coyhaique").
+  const ciudadEscrita = datos.ciudad.trim()
+  const ciudad = actuales.find((s) => sinTildes(s.ciudad) === sinTildes(ciudadEscrita))?.ciudad ?? ciudadEscrita
+
   if (!existente) {
+    if (!ciudad) throw new Error('La ciudad es obligatoria')
     if (!PREFIJO_VALIDO.test(prefijo)) throw new Error('El prefijo debe tener de 2 a 4 letras o números')
     if (actuales.some((s) => s.prefijo === prefijo)) throw new Error('Ese prefijo ya lo usa otra sucursal')
   } else if (!datos.activa && existente.activa && actuales.filter((s) => s.activa).length <= 1) {
@@ -55,12 +65,18 @@ export async function guardarSucursal(actor: UsuarioSesion, datos: DatosSucursal
   if (id.length < 2) throw new Error('El nombre debe tener al menos 2 letras o números')
   if (!existente && actuales.some((s) => s.id === id)) throw new Error('Ya existe una sucursal con un nombre equivalente')
 
-  await api.sucursales.guardar({ id, nombre, prefijo: existente?.prefijo ?? prefijo, activa: datos.activa })
+  await api.sucursales.guardar({
+    id,
+    nombre,
+    ciudad: existente?.ciudad ?? ciudad,
+    prefijo: existente?.prefijo ?? prefijo,
+    activa: datos.activa,
+  })
   await cargarSucursales()
   await auditar(
     actor,
     existente ? 'editar_sucursal' : 'crear_sucursal',
-    `${existente ? 'Editada' : 'Creada'} sucursal "${nombre}" (${existente?.prefijo ?? prefijo}) — ${datos.activa ? 'Activa' : 'Inactiva'}`,
+    `${existente ? 'Editada' : 'Creada'} sucursal "${nombre}" (${existente?.prefijo ?? prefijo}) de ${existente?.ciudad ?? ciudad} — ${datos.activa ? 'Activa' : 'Inactiva'}`,
     id,
     'sucursales',
   )

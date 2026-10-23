@@ -4,11 +4,11 @@ import { useUsuario } from '../auth/AuthContext'
 import { useImprimir } from '../components/PrintContext'
 import { Ticket, TicketsVenta, type DatosTicket } from '../components/Ticket'
 import { useToast } from '../components/Toast'
-import { etiquetaMetodo, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, formatoMonto } from '../lib/format'
 import { guardar, leer } from '../lib/storage'
-import { useSucursalesActivas } from '../lib/sucursales'
+import { ciudadDeSucursal, ciudadesDe, useSucursalesActivas } from '../lib/sucursales'
 import { registrarVenta, resumenCaja, retirosDelDia, ventasDelDia } from '../services/ventas'
-import type { MetodoPago, Sucursal, TipoArticulo, Venta } from '../types'
+import type { Ciudad, MetodoPago, Sucursal, TipoArticulo, Venta } from '../types'
 
 const MAX_PAQUETES = 10
 const NUMERO_REFRESCO_MS = 15_000
@@ -24,16 +24,17 @@ export function VentaPage() {
   const [ahora, setAhora] = useState(() => new Date())
   const [guardando, setGuardando] = useState(false)
 
-  // Cada usuario emite desde su sucursal (el admin elige la de la boleta) y elige el destino
-  // entre las demás sucursales activas.
+  // Cada usuario emite desde su sucursal (el admin elige la de la boleta) y elige la CIUDAD de destino
+  // entre las demás ciudades con sucursales activas: la carga la ve y la cobra cualquier sucursal de esa ciudad.
   const activas = useSucursalesActivas()
   const [origenElegido, setOrigenElegido] = useState<Sucursal>(usuario.sucursal)
   const origen = usuario.esAdmin && activas.some((s) => s.id === origenElegido) ? origenElegido : usuario.sucursal
-  const destinos = activas.filter((s) => s.id !== origen)
-  const [destinoElegido, setDestinoElegido] = useState<Sucursal>('')
+  const ciudadOrigen = ciudadDeSucursal(origen)
+  const destinos = ciudadesDe(activas).filter((c) => c !== ciudadOrigen)
+  const [destinoElegido, setDestinoElegido] = useState<Ciudad>('')
   const [destinoBloqueado, setDestinoBloqueado] = useState(false)
   // Sin elección válida (o si cambió el origen) se propone la primera opción.
-  const destino = destinos.some((s) => s.id === destinoElegido) ? destinoElegido : (destinos[0]?.id ?? '')
+  const destino = destinos.includes(destinoElegido) ? destinoElegido : (destinos[0] ?? '')
 
   const [autoItem, setAutoItem] = useState(true)
   const [itemManual, setItemManual] = useState('')
@@ -226,20 +227,20 @@ export function VentaPage() {
         <div className="campo">
           <span className="etiqueta">Destino</span>
           <div className="segmentado">
-            {destinos.map((s) => (
+            {destinos.map((c) => (
               <button
-                key={s.id}
+                key={c}
                 type="button"
-                className={destino === s.id ? 'sel' : ''}
+                className={destino === c ? 'sel' : ''}
                 disabled={destinoBloqueado}
-                onClick={() => setDestinoElegido(s.id)}
+                onClick={() => setDestinoElegido(c)}
               >
-                {s.nombre}
+                {c}
               </button>
             ))}
           </div>
-          {destinos.length === 0 && <small className="rojo-texto">No hay otra sucursal activa a la que enviar.</small>}
-          <small>Origen: {nombreSucursal(origen)}.</small>
+          {destinos.length === 0 && <small className="rojo-texto">No hay otra ciudad activa a la que enviar.</small>}
+          <small>Origen: {ciudadOrigen}.</small>
           <label className="check">
             <input type="checkbox" checked={destinoBloqueado} onChange={(e) => setDestinoBloqueado(e.target.checked)} />
             Mantener destino entre ventas
@@ -338,7 +339,7 @@ export function VentaPage() {
               </button>
             ))}
           </div>
-          {porPagar && <small>Se cobra al retirar en {nombreSucursal(destino)}; no lleva N° de comprobante.</small>}
+          {porPagar && <small>Se cobra al retirar en {destino}; no lleva N° de comprobante.</small>}
         </div>
 
         {!porPagar && (

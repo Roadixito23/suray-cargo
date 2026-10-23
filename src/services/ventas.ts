@@ -1,8 +1,9 @@
 import { api } from '../api'
 import { finDelDia, inicioDelDia } from '../lib/fechas'
-import { etiquetaMetodo, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, formatoMonto } from '../lib/format'
+import { ciudadDeSucursal, sucursalesDeCiudad } from '../lib/sucursales'
 import { formatearRut, validarRut } from '../lib/rut'
-import type { FiltroVentas, MetodoCobro, NuevaVenta, Sucursal, UsuarioSesion, Venta } from '../types'
+import type { Ciudad, FiltroVentas, MetodoCobro, NuevaVenta, Sucursal, UsuarioSesion, Venta } from '../types'
 import { auditar } from './auditoria'
 
 /** Admin ve todo; el resto solo sus propias ventas. */
@@ -29,7 +30,7 @@ export async function registrarVenta(usuario: UsuarioSesion, datos: NuevaVenta):
   await auditar(
     usuario,
     'crear_venta',
-    `Boleta ${venta.numeroBoleta} — ${nombreSucursal(venta.sucursalOrigen)} → ${nombreSucursal(venta.destino)} — ${formatoMonto(venta.monto)} (${etiquetaMetodo(venta.metodoPago)})`,
+    `Boleta ${venta.numeroBoleta} — ${ciudadDeSucursal(venta.sucursalOrigen)} → ${venta.destino} — ${formatoMonto(venta.monto)} (${etiquetaMetodo(venta.metodoPago)})`,
     venta.id,
     'ventas',
   )
@@ -56,24 +57,28 @@ export async function anularVenta(usuario: UsuarioSesion, venta: Venta, motivo: 
 // ── Por Pagar: retiro en la sucursal destino ────────────────────────────────────
 
 export interface OpcionesPendientes {
-  /** Solo admin: limita la lista a las cargas destinadas a esta sucursal (sin valor = todas). */
-  sucursal?: Sucursal
-  /** Solo no admin: incluye también las cargas destinadas a otras sucursales (cobro fuera del destino). */
+  /** Solo admin: limita la lista a las cargas destinadas a esta ciudad (sin valor = todas). */
+  ciudad?: Ciudad
+  /** Solo no admin: incluye también las cargas destinadas a otras ciudades (cobro fuera del destino). */
   todas?: boolean
 }
 
 /**
- * Cargas Por Pagar que esperan retiro. Por defecto, las destinadas a la sucursal del usuario; el admin ve
- * todas y puede filtrar por sucursal. Cobrar una carga de otro destino entra igual en la caja de quien cobra.
+ * Cargas Por Pagar que esperan retiro. Por defecto, las destinadas a la ciudad de la sucursal del usuario (las ven
+ * todas las sucursales de esa ciudad); el admin ve todas y puede filtrar por ciudad. Cobrar una carga de otro
+ * destino entra igual en la caja de quien cobra.
  */
 export async function porPagarPendientes(usuario: UsuarioSesion, opciones: OpcionesPendientes = {}): Promise<Venta[]> {
   const cualquierDestino = usuario.esAdmin || !!opciones.todas
   const ventas = await api.ventas.listar(
     usuario.esAdmin
       ? {}
-      : { usuarioId: usuario.id, ...(opciones.todas ? { porPagarCualquierDestino: true } : { porPagarDestino: usuario.sucursal }) },
+      : {
+          usuarioId: usuario.id,
+          ...(opciones.todas ? { porPagarCualquierDestino: true } : { porPagarDestino: ciudadDeSucursal(usuario.sucursal) }),
+        },
   )
-  const destino = usuario.esAdmin ? opciones.sucursal : cualquierDestino ? undefined : usuario.sucursal
+  const destino = usuario.esAdmin ? opciones.ciudad : cualquierDestino ? undefined : ciudadDeSucursal(usuario.sucursal)
   return ventas.filter(
     (v) => v.tipoVenta === 'por_pagar' && !v.anulada && !v.retiroFecha && (!destino || v.destino === destino),
   )
@@ -99,7 +104,7 @@ export interface DatosNuevoRetiro {
   nombre: string
   rut: string
   metodoPago: MetodoCobro
-  /** Solo admin: sucursal donde cobra. Los demás cobran siempre en la suya; sin valor, el destino de la carga. */
+  /** Solo admin: sucursal donde cobra. Los demás cobran siempre en la suya; sin valor, una sucursal de la ciudad destino. */
   sucursal?: Sucursal
 }
 
@@ -119,7 +124,7 @@ export async function registrarRetiro(usuario: UsuarioSesion, venta: Venta, dato
     metodoPago: datos.metodoPago,
     usuarioId: usuario.id,
     usuarioNombre: usuario.nombre,
-    sucursal: usuario.esAdmin ? (datos.sucursal ?? venta.destino) : usuario.sucursal,
+    sucursal: usuario.esAdmin ? (datos.sucursal ?? sucursalesDeCiudad(venta.destino)[0]?.id ?? usuario.sucursal) : usuario.sucursal,
   })
   await auditar(
     usuario,
@@ -141,7 +146,7 @@ export interface ResumenCaja {
   cantidadTarjeta: number
   totalAnulaciones: number
   cantidadAnulaciones: number
-  /** Cobros Por Pagar incluidos arriba cuyo destino no es la sucursal donde se cobraron (para conciliar). */
+  /** Cobros Por Pagar incluidos arriba cuyo destino es otra ciudad que la del cobro (para conciliar). */
   cantidadCobrosOtroDestino: number
   totalCobrosOtroDestino: number
 }
@@ -157,7 +162,7 @@ export function resumenCaja(ventas: Venta[], retiros: Venta[] = []): ResumenCaja
   const efectivo = [...activas.filter((v) => v.metodoPago === 'efectivo'), ...cobrados.filter((v) => v.retiroMetodoPago === 'efectivo')]
   const tarjeta = [...activas.filter((v) => v.metodoPago === 'tarjeta'), ...cobrados.filter((v) => v.retiroMetodoPago === 'tarjeta')]
   const suma = (l: Venta[]) => l.reduce((s, v) => s + v.monto, 0)
-  const otroDestino = cobrados.filter((v) => v.sucursalRetiro && v.sucursalRetiro !== v.destino)
+  const otroDestino = cobrados.filter((v) => v.sucursalRetiro && ciudadDeSucursal(v.sucursalRetiro) !== v.destino)
   return {
     totalEfectivo: suma(efectivo),
     totalTarjeta: suma(tarjeta),

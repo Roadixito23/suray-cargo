@@ -1,4 +1,5 @@
-import { etiquetaMetodo, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, formatoFechaHora, formatoMonto } from '../lib/format'
+import { ciudadDeSucursal } from '../lib/sucursales'
 import type { ResumenCaja } from '../services/ventas'
 import type { Venta } from '../types'
 
@@ -34,7 +35,7 @@ export function ListaRetiros({ retiros }: { retiros: Venta[] }) {
             <tr key={v.id}>
               <td>{v.numeroBoleta}</td>
               <td>{v.retiroFecha ? formatoFechaHora(v.retiroFecha).slice(-5) : ''}</td>
-              <td>{nombreSucursal(v.sucursalOrigen)} → {nombreSucursal(v.destino)}</td>
+              <td>{ciudadDeSucursal(v.sucursalOrigen)} → {v.destino}</td>
               <td>{v.retiroNombre}</td>
               <td>{v.retiroRut}</td>
               <td>{v.numeroComprobante}</td>

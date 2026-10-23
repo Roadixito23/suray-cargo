@@ -85,9 +85,9 @@ export const httpApi: Api = {
         if (filtro.porPagarCualquierDestino) {
           alternativas.push('and(tipo_venta.eq.por_pagar,anulada.eq.false,retiro_fecha.is.null)')
         } else if (filtro.porPagarDestino) {
-          alternativas.push(`and(tipo_venta.eq.por_pagar,destino.eq.${filtro.porPagarDestino})`)
+          alternativas.push(`and(tipo_venta.eq.por_pagar,destino.eq."${filtro.porPagarDestino}")`)
         }
-        if (filtro.destinoLlegada) alternativas.push(`destino.eq.${filtro.destinoLlegada}`)
+        if (filtro.destinoLlegada) alternativas.push(`destino.eq."${filtro.destinoLlegada}"`)
         q = alternativas.length > 1 ? q.or(alternativas.join(',')) : q.eq('usuario_id', filtro.usuarioId)
       }
       if (filtro.retiroUsuarioId) q = q.eq('retiro_usuario_id', filtro.retiroUsuarioId)
@@ -161,13 +161,13 @@ export const httpApi: Api = {
 
   sucursales: {
     async listar() {
-      const { data, error } = await supabase.from('sucursales').select('id, nombre, prefijo, activa').order('nombre')
+      const { data, error } = await supabase.from('sucursales').select('id, nombre, ciudad, prefijo, activa').order('nombre')
       if (error) throw new Error(error.message)
       return (data ?? []) as SucursalInfo[]
     },
 
     async guardar(s) {
-      // El prefijo solo se escribe al crear: las boletas ya emitidas lo llevan impreso.
+      // Prefijo y ciudad solo se escriben al crear: las boletas y los destinos ya emitidos los usan.
       const { data: actualizadas, error } = await supabase
         .from('sucursales')
         .update({ nombre: s.nombre, activa: s.activa })
@@ -177,7 +177,7 @@ export const httpApi: Api = {
       if (actualizadas.length > 0) return
       const { error: errorInsert } = await supabase
         .from('sucursales')
-        .insert({ id: s.id, nombre: s.nombre, prefijo: s.prefijo, activa: s.activa })
+        .insert({ id: s.id, nombre: s.nombre, ciudad: s.ciudad, prefijo: s.prefijo, activa: s.activa })
       if (errorInsert) throw new Error(errorInsert.message)
     },
   },

@@ -3,9 +3,14 @@
 /** Id de una sucursal del catálogo (ver `SucursalInfo`). Ya no es un conjunto fijo. */
 export type Sucursal = string
 
+/** Nombre de una ciudad. El destino de un envío es una ciudad: lo ve y lo cobra cualquier sucursal de ella. */
+export type Ciudad = string
+
 export interface SucursalInfo {
   id: Sucursal
   nombre: string
+  /** Ciudad a la que pertenece. No cambia una vez creada la sucursal (los destinos emitidos la usan). */
+  ciudad: Ciudad
   /** Prefijo del correlativo de boleta (AYS-000001). No cambia una vez creada la sucursal. */
   prefijo: string
   /** Una sucursal inactiva deja de ofrecerse como origen/destino, pero conserva su historial. */
@@ -30,7 +35,8 @@ export interface Venta {
   descripcion?: string | null
   /** Sucursal que emitió la boleta y envía la carga. */
   sucursalOrigen: Sucursal
-  destino: Sucursal
+  /** Ciudad de destino (no una sucursal concreta). */
+  destino: Ciudad
   item: string
   cantidad: string
   tipoProducto: string
@@ -52,7 +58,7 @@ export interface Venta {
   retiroMetodoPago?: MetodoCobro | null
   retiroUsuarioId?: string | null
   retiroUsuarioNombre?: string | null
-  /** Sucursal donde se cobró (puede diferir del destino); su caja es la del usuario que cobró. */
+  /** Sucursal donde se cobró (puede estar en otra ciudad que el destino); su caja es la del usuario que cobró. */
   sucursalRetiro?: Sucursal | null
 }
 
@@ -138,12 +144,12 @@ export interface FiltroVentas {
   desde?: Date
   hasta?: Date
   usuarioId?: string
-  /** Amplía el alcance: además de lo propio, incluye las cargas Por Pagar con este destino. */
-  porPagarDestino?: Sucursal
+  /** Amplía el alcance: además de lo propio, incluye las cargas Por Pagar con esta ciudad de destino. */
+  porPagarDestino?: Ciudad
   /** Amplía el alcance: además de lo propio, incluye toda carga Por Pagar pendiente, sea cual sea su destino. */
   porPagarCualquierDestino?: boolean
-  /** Amplía el alcance: además de lo propio, incluye todo envío que llega a esta sucursal. */
-  destinoLlegada?: Sucursal
+  /** Amplía el alcance: además de lo propio, incluye todo envío que llega a esta ciudad. */
+  destinoLlegada?: Ciudad
   retiroUsuarioId?: string
   retiroDesde?: Date
   retiroHasta?: Date

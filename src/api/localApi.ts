@@ -84,9 +84,11 @@ export const localApi: Api = {
 
     async crear(nueva) {
       const { sucursalBoleta, ...datos } = nueva
-      const activas = leerSucursales().filter((s) => s.activa).map((s) => s.id)
-      if (!activas.includes(sucursalBoleta)) throw new Error('sucursalBoleta inválida o inactiva')
-      if (!activas.includes(datos.destino)) throw new Error('destino inválido o inactivo')
+      const activas = leerSucursales().filter((s) => s.activa)
+      const origen = activas.find((s) => s.id === sucursalBoleta)
+      if (!origen) throw new Error('sucursalBoleta inválida o inactiva')
+      if (!activas.some((s) => s.ciudad === datos.destino)) throw new Error('destino inválido o inactivo')
+      if (origen.ciudad === datos.destino) throw new Error('El destino no puede ser la misma ciudad de origen')
       // Lectura + incremento + escritura son síncronos: atómico dentro del navegador.
       const contadores = leerContadores()
       contadores[sucursalBoleta] = (contadores[sucursalBoleta] ?? 0) + 1
@@ -253,19 +255,25 @@ export const localApi: Api = {
       const sucursales = leerSucursales()
       for (const s of r.sucursales ?? []) {
         const i = sucursales.findIndex((x) => x.id === s.id)
-        if (i >= 0) sucursales[i] = { ...sucursales[i], nombre: s.nombre, activa: s.activa }
-        else sucursales.push(s)
+        const completa = { ...s, ciudad: s.ciudad ?? s.nombre }
+        if (i >= 0) sucursales[i] = { ...sucursales[i], nombre: completa.nombre, activa: completa.activa }
+        else sucursales.push(completa)
       }
       guardar(K.sucursales, sucursales)
 
-      // Respaldos anteriores no traen `sucursalOrigen`: se deduce del prefijo de la boleta.
+      // Respaldos anteriores no traen `sucursalOrigen` (se deduce del prefijo de la boleta) y su
+      // `destino` era el id de una sucursal, no el nombre de una ciudad.
       const origenDe = (numero: string) => sucursales.find((s) => s.prefijo === numero.split('-')[0])?.id
+      const ciudadDeDestino = (d: string) => sucursales.find((s) => s.id === d)?.ciudad ?? d
       const porId = new Map(leer<Venta[]>(K.ventas, []).map((v) => [v.id, v]))
       for (const v of r.ventas) {
         porId.set(v.id, {
           ...v,
+          destino: ciudadDeDestino(v.destino),
           sucursalOrigen: v.sucursalOrigen ?? origenDe(v.numeroBoleta) ?? v.destino,
-          sucursalRetiro: v.retiroFecha ? (v.sucursalRetiro ?? v.destino) : null,
+          sucursalRetiro: v.retiroFecha
+            ? (v.sucursalRetiro ?? sucursales.find((s) => s.ciudad === ciudadDeDestino(v.destino))?.id ?? null)
+            : null,
         })
       }
       guardar(K.ventas, [...porId.values()])

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useUsuario } from '../auth/AuthContext'
 import { aInputDate, desdeInputDate, finDelDia } from '../lib/fechas'
 import { api } from '../api'
-import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto } from '../lib/format'
 import { normalizarRut } from '../lib/rut'
-import { useSucursales } from '../lib/sucursales'
+import { ciudadDeSucursal, useCiudades } from '../lib/sucursales'
 import { listarVentas } from '../services/ventas'
-import type { Sucursal, Venta } from '../types'
+import type { Ciudad, Venta } from '../types'
 
 interface Props {
   /** Botones por fila (reimprimir, anular, detalle…). Recibe `recargar` para refrescar tras actuar. */
@@ -23,12 +23,12 @@ interface Props {
  */
 export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props) {
   const usuario = useUsuario()
-  const sucursales = useSucursales()
+  const ciudades = useCiudades()
   const hoy = aInputDate(new Date())
   const [desde, setDesde] = useState(hoy)
   const [hasta, setHasta] = useState(hoy)
   const [texto, setTexto] = useState('')
-  const [destino, setDestino] = useState<'' | Sucursal>('')
+  const [destino, setDestino] = useState<'' | Ciudad>('')
   const [metodo, setMetodo] = useState('')
   const [ventas, setVentas] = useState<Venta[]>([])
   const [cargando, setCargando] = useState(true)
@@ -41,7 +41,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
     const porFecha = listarVentas(usuario, {
       desde: d,
       hasta: fin,
-      ...(incluirLlegadas ? { destinoLlegada: usuario.sucursal } : {}),
+      ...(incluirLlegadas ? { destinoLlegada: ciudadDeSucursal(usuario.sucursal) } : {}),
     })
     // Un envío Por Pagar puede venderse un día y retirarse otro: también se buscan por fecha de retiro.
     const porRetiro = incluirLlegadas
@@ -91,10 +91,10 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
         />
         <label>Desde <input type="date" value={desde} max={hasta} onChange={(e) => setDesde(e.target.value)} /></label>
         <label>Hasta <input type="date" value={hasta} min={desde} onChange={(e) => setHasta(e.target.value)} /></label>
-        <select value={destino} onChange={(e) => setDestino(e.target.value as '' | Sucursal)} aria-label="Destino">
+        <select value={destino} onChange={(e) => setDestino(e.target.value)} aria-label="Destino">
           <option value="">Todos los destinos</option>
-          {sucursales.map((s) => (
-            <option key={s.id} value={s.id}>{s.nombre}</option>
+          {ciudades.map((c) => (
+            <option key={c} value={c}>{c}</option>
           ))}
         </select>
         <select value={metodo} onChange={(e) => setMetodo(e.target.value)} aria-label="Método de pago">
@@ -118,8 +118,8 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
               <tr key={v.id} className={v.anulada ? 'anulada' : ''}>
                 <td>{v.numeroBoleta}{v.anulada && <span className="badge rojo">Anulada</span>}</td>
                 <td>{formatoFechaHora(v.fecha)}</td>
-                <td>{nombreSucursal(v.sucursalOrigen)}</td>
-                <td>{nombreSucursal(v.destino)}</td>
+                <td>{ciudadDeSucursal(v.sucursalOrigen)}</td>
+                <td>{v.destino}</td>
                 <td>{v.destinatario}</td>
                 <td>{v.remitente}</td>
                 <td className="der">{formatoMonto(v.monto)}</td>

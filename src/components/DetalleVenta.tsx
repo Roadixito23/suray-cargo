@@ -1,4 +1,5 @@
 import { etiquetaMetodo, etiquetaTipoVenta, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { ciudadDeSucursal } from '../lib/sucursales'
 import type { Venta } from '../types'
 
 /** Ficha de una venta: encabezado, monto y forma de pago destacados, y datos agrupados por tema. */
@@ -52,8 +53,8 @@ export function DetalleVenta({ v }: { v: Venta }) {
       <div className="fila">
         {campo('Destinatario', v.destinatario)}
         {campo('Remitente', v.remitente)}
-        {campo('Origen', nombreSucursal(v.sucursalOrigen))}
-        {campo('Destino', nombreSucursal(v.destino))}
+        {campo('Origen', ciudadDeSucursal(v.sucursalOrigen))}
+        {campo('Destino', v.destino)}
         {campo('Ítem / Cantidad', `${v.item} / ${v.cantidad}`)}
       </div>
 
@@ -84,7 +85,10 @@ export function DetalleVenta({ v }: { v: Venta }) {
       )}
 
       <hr />
-      <div className="fila">{campo('Vendedor', v.usuarioNombre)}</div>
+      <div className="fila">
+        {campo('Vendedor', v.usuarioNombre)}
+        {campo('Sucursal emisora', nombreSucursal(v.sucursalOrigen))}
+      </div>
     </div>
   )
 }
