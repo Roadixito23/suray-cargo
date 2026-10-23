@@ -3,3 +3,6 @@ dist
 *.local
 *.tsbuildinfo
 .DS_Store
+
+# Config local del MCP (lleva credenciales)
+.mcp.json
