@@ -116,11 +116,20 @@ input[type='checkbox'] { width: auto; }
 .marca small { display: block; }
 .marca small.version { color: var(--sub); font-size: .72rem; }
 a.nav, button.nav {
-  display: block; width: 100%; text-align: left; padding: .6rem .75rem; border-radius: 8px; color: var(--texto);
-  text-decoration: none; border: 0; background: none; cursor: pointer;
+  display: flex; align-items: center; gap: .7rem; width: 100%; text-align: left; padding: .55rem .75rem; border-radius: 8px;
+  color: var(--texto); text-decoration: none; border: 0; background: none; cursor: pointer; position: relative;
 }
 a.nav:hover, button.nav:hover { background: var(--hover); }
 a.nav.activo { background: var(--azul-claro); color: var(--azul); font-weight: 600; }
+/* Barra de acento a la izquierda del ítem activo. */
+a.nav.activo::before {
+  content: ''; position: absolute; left: 0; top: 22%; bottom: 22%; width: 3px; border-radius: 0 3px 3px 0; background: var(--azul);
+}
+.nav-icono { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+a.nav.activo .nav-icono { opacity: 1; }
+.nav-seccion { display: flex; flex-direction: column; gap: 2px; padding-bottom: .5rem; }
+.nav-seccion + .nav-seccion { border-top: 1px solid var(--borde); padding-top: .5rem; }
+.nav-titulo { padding: .35rem .75rem .25rem; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--sub); }
 button.nav.salir { color: var(--rojo); }
 
 /* Animación al cambiar de tema: círculo que se expande (lo anima tema.ts) o, sin soporte, fundido de colores. */
