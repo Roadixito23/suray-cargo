@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { api } from '../api'
 import { useUsuario } from '../auth/AuthContext'
 import { useImprimir } from '../components/PrintContext'
 import { Ticket, TicketsVenta, type DatosTicket } from '../components/Ticket'
 import { useToast } from '../components/Toast'
 import { etiquetaMetodo, formatoMonto } from '../lib/format'
+import { useAutoScrollPorMouse } from '../lib/autoScroll'
 import { guardar, leer } from '../lib/storage'
 import { ciudadDeSucursal, ciudadesDe, useSucursalesActivas } from '../lib/sucursales'
 import { registrarVenta, resumenCaja, retirosDelDia, ventasDelDia } from '../services/ventas'
@@ -17,6 +18,8 @@ export function VentaPage() {
   const usuario = useUsuario()
   const toast = useToast()
   const imprimir = useImprimir()
+  const formRef = useRef<HTMLFormElement>(null)
+  useAutoScrollPorMouse(formRef)
 
   const [hoy, setHoy] = useState<Venta[]>([])
   const [retiros, setRetiros] = useState<Venta[]>([])
@@ -204,7 +207,7 @@ export function VentaPage() {
 
   return (
     <div className="venta-grid">
-      <form className="panel" onSubmit={enviar} onKeyDown={alTeclear}>
+      <form className="panel" ref={formRef} onSubmit={enviar} onKeyDown={alTeclear}>
         <div className="resumen-dia">
           <span>Total Efectivo: <strong>{formatoMonto(resumen.totalEfectivo)}</strong></span>
           <span>Total Tarjeta: <strong>{formatoMonto(resumen.totalTarjeta)}</strong></span>
