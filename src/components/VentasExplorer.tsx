@@ -3,7 +3,7 @@ import { useUsuario } from '../auth/AuthContext'
 import { FilasSkeleton } from './Skeleton'
 import { aInputDate, desdeInputDate, finDelDia } from '../lib/fechas'
 import { api } from '../api'
-import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto } from '../lib/format'
+import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, sinMonto } from '../lib/format'
 import { normalizarRut } from '../lib/rut'
 import { ciudadDeSucursal, useCiudades } from '../lib/sucursales'
 import { listarVentas } from '../services/ventas'
@@ -74,6 +74,8 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
           v.numeroBoleta.toLowerCase().includes(q) ||
           v.destinatario.toLowerCase().includes(q) ||
           v.remitente.toLowerCase().includes(q) ||
+          (v.telefonoDestinatario ?? '').includes(q) ||
+          (v.telefonoRemitente ?? '').includes(q) ||
           (v.retiroNombre ?? '').toLowerCase().includes(q) ||
           (v.numeroComprobante ?? '').toLowerCase().includes(q) ||
           (qRut.length > 1 && normalizarRut(v.retiroRut ?? '').includes(qRut))),
@@ -124,7 +126,7 @@ export function VentasExplorer({ acciones, soloActivas, incluirLlegadas }: Props
                 <td>{v.destino}</td>
                 <td>{v.destinatario}</td>
                 <td>{v.remitente}</td>
-                <td className="der">{formatoMonto(v.monto)}</td>
+                <td className="der">{sinMonto(v) ? '' : formatoMonto(v.monto)}</td>
                 <td>
                   {etiquetaMetodo(v.metodoPago)}
                   {v.metodoPago === 'por_pagar' && !v.anulada && (

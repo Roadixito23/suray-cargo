@@ -7,7 +7,7 @@ import type { FiltroAuditoria, FiltroVentas, RegistroAuditoria, Sucursal, Sucurs
 const COLUMNAS_USUARIO = 'id, nombre, usuario, es_admin, fecha_creacion, sucursal'
 const COLUMNAS_VENTA =
   'id, numero_boleta, monto, metodo_pago, fecha, descripcion, destino, sucursal_origen, item, cantidad, tipo_producto,' +
-  ' tipos_articulos, destinatario, remitente, usuario_id, usuario_nombre, numero_comprobante, anulada,' +
+  ' tipos_articulos, destinatario, remitente, telefono_destinatario, telefono_remitente, usuario_id, usuario_nombre, numero_comprobante, anulada,' +
   ' motivo_anulacion, fecha_anulacion, usuario_anulacion, tipo_venta, retiro_fecha, retiro_nombre, retiro_rut,' +
   ' retiro_metodo_pago, retiro_usuario_id, retiro_usuario_nombre, sucursal_retiro'
 
@@ -28,6 +28,8 @@ function filaAVenta(f: any): Venta {
     tiposArticulos: f.tipos_articulos,
     destinatario: f.destinatario,
     remitente: f.remitente,
+    telefonoDestinatario: f.telefono_destinatario,
+    telefonoRemitente: f.telefono_remitente,
     usuarioId: f.usuario_id,
     usuarioNombre: f.usuario_nombre,
     numeroComprobante: f.numero_comprobante,

@@ -1,5 +1,7 @@
 const moneda = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
 export const formatoMonto = (n: number) => `$${moneda.format(n)}`
+/** Por Pagar registrado sin monto: no se muestra ningún valor. */
+export const sinMonto = (v: { metodoPago: string; monto: number }) => v.metodoPago === 'por_pagar' && v.monto <= 0
 
 const fechaHora = new Intl.DateTimeFormat('es-CL', {
   day: '2-digit',

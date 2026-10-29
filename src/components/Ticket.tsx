@@ -1,4 +1,4 @@
-import { etiquetaMetodo, formatoFechaHora, formatoMonto } from '../lib/format'
+import { etiquetaMetodo, formatoFechaHora, formatoMonto, sinMonto } from '../lib/format'
 import { ciudadDeSucursal } from '../lib/sucursales'
 import type { Venta } from '../types'
 
@@ -11,9 +11,14 @@ export type DatosTicket = Pick<
   | 'fecha'
   | 'destinatario'
   | 'remitente'
+  | 'telefonoDestinatario'
+  | 'telefonoRemitente'
   | 'usuarioNombre'
   | 'monto'
   | 'cantidad'
+  | 'item'
+  | 'tipoProducto'
+  | 'tiposArticulos'
   | 'metodoPago'
   | 'numeroComprobante'
 >
@@ -33,7 +38,22 @@ function Campo({ etiqueta, valor, fuerte }: { etiqueta: string; valor: string; f
   )
 }
 
-/** Un ticket = un paquete (N/total). Ancho 80 mm, ver estilos `.ticket*` en styles.css. */
+/**
+ * Destinatario / Remitente: el valor ocupa el ancho del ticket (5 px de margen a cada lado) y se agranda
+ * hasta 16 pt; los nombres largos bajan hasta 10 pt antes de partirse en varias líneas.
+ */
+function CampoAncho({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+  const texto = valor.trim() || '-'
+  const tamano = Math.min(16, Math.max(10, 330 / texto.length))
+  return (
+    <div className="ticket-campo-ancho">
+      <span className="ticket-etiqueta">{etiqueta}</span>
+      <span className="ticket-valor-ancho" style={{ fontSize: `${tamano}pt` }}>{texto}</span>
+    </div>
+  )
+}
+
+/** Un ticket = un paquete. El ítem es el del destinatario y es igual en todos ("12/3"); cambia el producto. Ancho 80 mm, ver estilos `.ticket*` en styles.css. */
 export function Ticket({ venta, paquete }: { venta: DatosTicket; paquete: number }) {
   const total = venta.cantidad || '1'
   const porPagar = venta.metodoPago === 'por_pagar'
@@ -55,15 +75,18 @@ export function Ticket({ venta, paquete }: { venta: DatosTicket; paquete: number
         </div>
         <hr />
         <Campo etiqueta="Fecha:" valor={formatoFechaHora(venta.fecha)} />
-        <Campo etiqueta="Item:" valor={`${paquete}/${total}`} />
-        <Campo etiqueta="Destinatario:" valor={venta.destinatario} />
-        <Campo etiqueta="Remitente:" valor={venta.remitente} />
+        <Campo etiqueta="Item:" valor={`${venta.item}/${total}`} />
+        <Campo etiqueta="Producto:" valor={venta.tiposArticulos?.[paquete - 1]?.tipo || venta.tipoProducto || '-'} />
+        <CampoAncho etiqueta="Destinatario:" valor={venta.destinatario} />
+        {venta.telefonoDestinatario?.trim() && <Campo etiqueta="Tel. destinatario:" valor={venta.telefonoDestinatario} />}
+        {venta.remitente.trim() !== '' && <CampoAncho etiqueta="Remitente:" valor={venta.remitente} />}
+        {venta.telefonoRemitente?.trim() && <Campo etiqueta="Tel. remitente:" valor={venta.telefonoRemitente} />}
         <hr />
         <Campo etiqueta="Vendedor:" valor={venta.usuarioNombre} />
         <hr />
         <div className="ticket-seccion">Método de Pago</div>
         <Campo etiqueta="Pago:" valor={etiquetaMetodo(venta.metodoPago)} fuerte={porPagar} />
-        <Campo etiqueta="Valor:" valor={formatoMonto(venta.monto)} fuerte />
+        {!sinMonto(venta) && <Campo etiqueta="Valor:" valor={formatoMonto(venta.monto)} fuerte />}
         {!porPagar && <Campo etiqueta="N° Comprobante:" valor={venta.numeroComprobante || '-'} />}
       </div>
       <Cinta />

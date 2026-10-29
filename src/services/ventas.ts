@@ -175,3 +175,11 @@ export function resumenCaja(ventas: Venta[], retiros: Venta[] = []): ResumenCaja
     totalCobrosOtroDestino: suma(otroDestino),
   }
 }
+
+/**
+ * El ítem es por destinatario: todos los paquetes de una venta llevan el mismo número ("12/3").
+ * La cuenta sigue desde el mayor ítem usado hoy, sea automático o personalizado.
+ */
+export function siguienteItem(ventasHoy: Venta[]): number {
+  return ventasHoy.reduce((m, v) => Math.max(m, parseInt(v.item, 10) || 0), 0) + 1
+}

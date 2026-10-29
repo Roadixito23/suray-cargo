@@ -8,10 +8,11 @@ import { etiquetaMetodo, formatoMonto } from '../lib/format'
 import { useAutoScrollPorMouse } from '../lib/autoScroll'
 import { guardar, leer } from '../lib/storage'
 import { ciudadDeSucursal, ciudadesDe, useSucursalesActivas } from '../lib/sucursales'
-import { registrarVenta, resumenCaja, retirosDelDia, ventasDelDia } from '../services/ventas'
+import { registrarVenta, resumenCaja, retirosDelDia, siguienteItem, ventasDelDia } from '../services/ventas'
 import type { Ciudad, MetodoPago, Sucursal, TipoArticulo, Venta } from '../types'
 
 const MAX_PAQUETES = 10
+const soloTelefono = (s: string) => s.replace(/[^\d+ ]/g, '')
 const NUMERO_REFRESCO_MS = 15_000
 
 export function VentaPage() {
@@ -49,6 +50,8 @@ export function VentaPage() {
   const [articulos, setArticulos] = useState<TipoArticulo[]>([])
   const [destinatario, setDestinatario] = useState('')
   const [remitente, setRemitente] = useState('')
+  const [telDestinatario, setTelDestinatario] = useState('')
+  const [telRemitente, setTelRemitente] = useState('')
   const [metodo, setMetodo] = useState<MetodoPago>('efectivo')
 
   const n = Math.min(MAX_PAQUETES, Math.max(1, parseInt(cantidad, 10) || 1))
@@ -106,9 +109,8 @@ export function VentaPage() {
     })
   }, [n])
 
-  // Cada paquete consume un número de ítem, aunque varias ventas los agrupen en una boleta.
-  const paquetesHoy = hoy.reduce((s, v) => s + (parseInt(v.cantidad, 10) || 1), 0)
-  const item = autoItem ? String(paquetesHoy + 1) : itemManual
+  // El ítem es por destinatario (todos sus paquetes comparten número); la cuenta sigue desde el último usado.
+  const item = autoItem ? String(siguienteItem(hoy)) : itemManual
   const porPagar = metodo === 'por_pagar'
   // Las ventas Por Pagar no llevan comprobante, así que no consumen número.
   const numeroComprobante = porPagar
@@ -122,10 +124,9 @@ export function VentaPage() {
     destino !== '' &&
     item !== '' &&
     destinatario.trim() !== '' &&
-    remitente.trim() !== '' &&
     (multi
-      ? articulos.length === n && articulos.every((a) => a.tipo.trim() !== '' && a.precio > 0)
-      : tipoProducto.trim() !== '' && Number(monto) > 0)
+      ? articulos.length === n && articulos.every((a) => a.tipo.trim() !== '' && (porPagar || a.precio > 0))
+      : tipoProducto.trim() !== '' && (porPagar || Number(monto) > 0))
 
   const resumen = useMemo(() => resumenCaja(hoy, retiros), [hoy, retiros])
 
@@ -136,6 +137,11 @@ export function VentaPage() {
     fecha: ahora.toISOString(),
     destinatario,
     remitente,
+    telefonoDestinatario: telDestinatario.trim() || null,
+    telefonoRemitente: telRemitente.trim() || null,
+    item,
+    tipoProducto: multi ? '' : tipoProducto.trim(),
+    tiposArticulos: multi ? articulos.map((a) => ({ tipo: a.tipo.trim(), precio: a.precio })) : null,
     usuarioNombre: usuario.nombre,
     monto: montoCalculado,
     cantidad: String(n),
@@ -150,8 +156,11 @@ export function VentaPage() {
     setArticulos([])
     setDestinatario('')
     setRemitente('')
+    setTelDestinatario('')
+    setTelRemitente('')
     setOpManual('')
     setItemManual('')
+    setAutoItem(true) // la cuenta continúa desde el ítem personalizado que se acaba de usar
     setMetodo('efectivo')
     if (!destinoBloqueado) setDestinoElegido('')
   }
@@ -173,6 +182,8 @@ export function VentaPage() {
         tiposArticulos: multi ? articulos.map((a) => ({ tipo: a.tipo.trim(), precio: a.precio })) : null,
         destinatario: destinatario.trim(),
         remitente: remitente.trim(),
+        telefonoDestinatario: telDestinatario.trim() || null,
+        telefonoRemitente: telRemitente.trim() || null,
         usuarioId: usuario.id,
         usuarioNombre: usuario.nombre,
         numeroComprobante: numeroComprobante.trim() ? numeroComprobante.trim() : null,
@@ -260,7 +271,11 @@ export function VentaPage() {
               onChange={(e) => setItemManual(e.target.value.replace(/\D/g, ''))}
             />
             <label className="check">
-              <input type="checkbox" checked={autoItem} onChange={(e) => setAutoItem(e.target.checked)} />
+              <input type="checkbox" checked={autoItem} onChange={(e) => {
+                  if (!e.target.checked) setItemManual(item) // se edita a partir del número propuesto
+                  setAutoItem(e.target.checked)
+                }}
+              />
               Autocompletar
             </label>
           </label>
@@ -289,7 +304,7 @@ export function VentaPage() {
                   onChange={(e) => setArticulo(i, { tipo: e.target.value })}
                 />
                 <input
-                  placeholder="Precio"
+                  placeholder={porPagar ? 'Precio (opcional)' : 'Precio'}
                   aria-label={`Precio paquete ${i + 1}`}
                   inputMode="numeric"
                   value={a.precio || ''}
@@ -316,7 +331,7 @@ export function VentaPage() {
               <input value={tipoProducto} onChange={(e) => setTipoProducto(e.target.value)} />
             </label>
             <label className="campo">
-              <span className="etiqueta">Monto</span>
+              <span className="etiqueta">{porPagar ? 'Monto (opcional)' : 'Monto'}</span>
               <input inputMode="numeric" value={monto} onChange={(e) => setMonto(e.target.value.replace(/\D/g, ''))} />
             </label>
           </div>
@@ -328,8 +343,19 @@ export function VentaPage() {
             <input value={destinatario} onChange={(e) => setDestinatario(e.target.value)} />
           </label>
           <label className="campo">
-            <span className="etiqueta">Remitente</span>
+            <span className="etiqueta">Teléfono del destinatario (opcional)</span>
+            <input inputMode="tel" value={telDestinatario} onChange={(e) => setTelDestinatario(soloTelefono(e.target.value))} />
+          </label>
+        </div>
+
+        <div className="fila">
+          <label className="campo">
+            <span className="etiqueta">Remitente (opcional)</span>
             <input value={remitente} onChange={(e) => setRemitente(e.target.value)} />
+          </label>
+          <label className="campo">
+            <span className="etiqueta">Teléfono del remitente (opcional)</span>
+            <input inputMode="tel" value={telRemitente} onChange={(e) => setTelRemitente(soloTelefono(e.target.value))} />
           </label>
         </div>
 
@@ -364,7 +390,7 @@ export function VentaPage() {
       <aside className="panel vista-previa">
         <h3>Vista previa del ticket</h3>
         <div className="ticket-marco">
-          <Ticket venta={vistaPrevia} paquete={Number(item) || 1} />
+          <Ticket venta={vistaPrevia} paquete={1} />
         </div>
         <small>N° de transacción estimado: el definitivo lo asigna el sistema al guardar.</small>
         {multi && <small>Se imprimirán {n} tickets (uno por paquete).</small>}

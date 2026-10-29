@@ -1,4 +1,4 @@
-import { etiquetaMetodo, etiquetaTipoVenta, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, etiquetaTipoVenta, formatoFechaHora, formatoMonto, nombreSucursal, sinMonto } from '../lib/format'
 import { ciudadDeSucursal } from '../lib/sucursales'
 import type { Venta } from '../types'
 
@@ -37,10 +37,12 @@ export function DetalleVenta({ v }: { v: Venta }) {
       <p className="sub">{formatoFechaHora(v.fecha)}</p>
 
       <div className="tarjetas">
-        <div className="tarjeta destacada">
-          <small>Monto</small>
-          <strong>{formatoMonto(v.monto)}</strong>
-        </div>
+        {!sinMonto(v) && (
+          <div className="tarjeta destacada">
+            <small>Monto</small>
+            <strong>{formatoMonto(v.monto)}</strong>
+          </div>
+        )}
         <div className="tarjeta">
           <small>Forma de pago</small>
           <strong>{etiquetaMetodo(v.metodoPago)}</strong>
@@ -52,7 +54,9 @@ export function DetalleVenta({ v }: { v: Venta }) {
       <h4 className="etiqueta">Envío</h4>
       <div className="fila">
         {campo('Destinatario', v.destinatario)}
+        {campo('Teléfono destinatario', v.telefonoDestinatario)}
         {campo('Remitente', v.remitente)}
+        {campo('Teléfono remitente', v.telefonoRemitente)}
         {campo('Origen', ciudadDeSucursal(v.sucursalOrigen))}
         {campo('Destino', v.destino)}
         {campo('Ítem / Cantidad', `${v.item} / ${v.cantidad}`)}
@@ -62,7 +66,7 @@ export function DetalleVenta({ v }: { v: Venta }) {
         <>
           <h4 className="etiqueta">Artículos</h4>
           {v.tiposArticulos.map((a, i) => (
-            <div key={i}>{fila(`${i + 1}. ${a.tipo}`, formatoMonto(a.precio))}</div>
+            <div key={i}>{fila(`${i + 1}. ${a.tipo}`, a.precio > 0 ? formatoMonto(a.precio) : '')}</div>
           ))}
         </>
       ) : (

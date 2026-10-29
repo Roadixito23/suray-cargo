@@ -4,7 +4,7 @@ import { resetLocal } from '../api/localApi'
 import type { NuevaVenta, UsuarioSesion } from '../types'
 import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
 import {
-  anularVenta, listarVentas, porPagarPendientes, registrarRetiro, registrarVenta, resumenCaja, retirosDelDia, ventasDelDia,
+  anularVenta, listarVentas, porPagarPendientes, registrarRetiro, registrarVenta, resumenCaja, retirosDelDia, siguienteItem, ventasDelDia,
 } from './ventas'
 import { ciudadDeSucursal } from '../lib/sucursales'
 import { cargarSucursales, guardarSucursal, type DatosSucursal } from './sucursales'
@@ -321,5 +321,15 @@ describe('RUT', () => {
     expect(validarRut('1-9')).toBe(false)
     expect(formatearRut('123456785')).toBe('12.345.678-5')
     expect(normalizarRut('12.345.678-k')).toBe('12345678K')
+  })
+})
+
+describe('ítem por destinatario', () => {
+  it('parte en 1 y sigue desde el mayor ítem usado, también si fue personalizado', async () => {
+    expect(siguienteItem([])).toBe(1)
+    await registrarVenta(cajero, base({ item: '1', cantidad: '3' })) // 3 paquetes, un solo ítem
+    expect(siguienteItem(await ventasDelDia(cajero))).toBe(2)
+    await registrarVenta(cajero, base({ item: '12' })) // ítem personalizado
+    expect(siguienteItem(await ventasDelDia(cajero))).toBe(13)
   })
 })

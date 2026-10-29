@@ -3,7 +3,7 @@ import { useUsuario } from '../auth/AuthContext'
 import { Modal } from '../components/Modal'
 import { FilasSkeleton } from '../components/Skeleton'
 import { useToast } from '../components/Toast'
-import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, nombreSucursal } from '../lib/format'
+import { etiquetaMetodo, formatoFecha, formatoFechaHora, formatoMonto, nombreSucursal, sinMonto } from '../lib/format'
 import { formatearRut, normalizarRut, validarRut } from '../lib/rut'
 import { ciudadDeSucursal, useCiudades } from '../lib/sucursales'
 import { porPagarPendientes, registrarRetiro } from '../services/ventas'
@@ -45,7 +45,9 @@ export function RetiroPorPagarPage() {
       (v) =>
         v.numeroBoleta.toLowerCase().includes(q) ||
         v.destinatario.toLowerCase().includes(q) ||
-        v.remitente.toLowerCase().includes(q),
+        v.remitente.toLowerCase().includes(q) ||
+        (v.telefonoDestinatario ?? '').includes(q) ||
+        (v.telefonoRemitente ?? '').includes(q),
     )
   }, [pendientes, texto])
 
@@ -124,7 +126,7 @@ export function RetiroPorPagarPage() {
                   <td>{v.destino}</td>
                   <td>{v.destinatario}</td>
                   <td>{v.remitente}</td>
-                  <td className="der">{formatoMonto(v.monto)}</td>
+                  <td className="der">{sinMonto(v) ? '' : formatoMonto(v.monto)}</td>
                   <td className="acciones">
                     <button className="btn primario" onClick={() => setObjetivo(v)}>Registrar retiro</button>
                   </td>
@@ -145,14 +147,19 @@ export function RetiroPorPagarPage() {
             <>
               <button className="btn" onClick={cerrar}>Cancelar</button>
               <button className="btn primario" disabled={!completo || enviando} onClick={confirmar}>
-                {enviando ? 'Guardando…' : `Registrar y cobrar ${formatoMonto(objetivo.monto)}`}
+                {enviando ? 'Guardando…' : sinMonto(objetivo) ? 'Registrar y cobrar' : `Registrar y cobrar ${formatoMonto(objetivo.monto)}`}
               </button>
             </>
           }
         >
           <p>
-            Boleta <strong>{objetivo.numeroBoleta}</strong> — {objetivo.destinatario} (de {objetivo.remitente}) —{' '}
-            <strong>{formatoMonto(objetivo.monto)}</strong>
+            Boleta <strong>{objetivo.numeroBoleta}</strong> — {objetivo.destinatario}
+            {objetivo.remitente.trim() && ` (de ${objetivo.remitente})`}
+            {!sinMonto(objetivo) && (
+              <>
+                {' '}— <strong>{formatoMonto(objetivo.monto)}</strong>
+              </>
+            )}
           </p>
           {!usuario.esAdmin && objetivo.destino !== ciudadUsuario && (
             <div className="aviso">

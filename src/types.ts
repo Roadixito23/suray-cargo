@@ -43,6 +43,8 @@ export interface Venta {
   tiposArticulos?: TipoArticulo[] | null
   destinatario: string
   remitente: string
+  telefonoDestinatario?: string | null
+  telefonoRemitente?: string | null
   usuarioId: string
   usuarioNombre: string
   numeroComprobante?: string | null
